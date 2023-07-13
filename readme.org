@@ -67,6 +67,8 @@ variables are listed as benefits ($b_x$) and costs ($c_x$).
 - $c_a$ detection cost of committing crime
 
  #+caption: Supply chain pay-off. Note empty cell indicate no pay-off.
+ #+name: table:payoff
+ #+attr_latex: :float multicolumn
  | Roles      |              |            |          | Pay-off    |              |                   |          |
  | Production | Distribution | Management | Civilian | Production | Distribution | Management        | Civilian |
  |------------+--------------+------------+----------+------------+--------------+-------------------+----------|
@@ -113,204 +115,110 @@ and their strategy  approaches a random choice  to defect or
 conform.
 
 * Simulation
-
-#+caption: Creating the data structures
-#+begin_src jupyter-python
-
-from dataclasses import dataclass
-import pandas as pd
-
-@dataclass
-class Payoff:
-    benefits: list
-    costs: list
-@dataclass
-class Config:
-    payoff: Payoff
-    beta: float
-    role_map: dict
-    roles: dict
-
-
-
-
-#+end_src
-
-#+RESULTS:
-
-#+caption: Update rules
-#+begin_src jupyter-python
-def fermi_update(agent: int,
-                 g: nx.Graph,
-                 payoff: dict,
-                 roles: dict,
-                 role_map: dict,
-                 beta = 1.0) -> float:
-    # get neighbor from each missing sub population
-    neighbors = list(g.neighbors(agent))
-    np.random.shuffle(neighbors)
-    r = {}
-    r[g.nodes[ agent ]["role"]] = g.nodes[agent]["state"]
-    for neighbor in neighbors:
-        if len(r) == len(roles):
-            break
-        neighbor = g.nodes[neighbor]
-        if neighbor["role"] not in states:
-            r[neighbor["role"]] = neighbor["state"]
-
-    current_state = "".join(r[role] for role in roles)
-    current = g.nodes[agent]["state"]
-    not_current = "C" if current == "D" else "C"
-    swapped_state = list(current_state)
-
-    role_idx = role_map[g.nodes[agent]["role"]]
-    swapped_state[role_idx] = not_current
-
-    swapped_state = "".join(i for i in swapped_state)
-
-    state_i = payoff[current_state]
-    state_j = payoff[swapped_state]
-    # lookup payoff for current node
-
-    delta = (state_j.benefits[role_idx] - state_j.costs[role_idx]) - (state_i.benefits[role_idx] - state_i.costs[role_idx])
-    p =  1 / (1 + np.exp(- beta * delta))
-    if np.random.rand() < p:
-        return not_current
-    return current
-
-    # collect states and index into the correct
-#+end_src
-
-#+RESULTS:
-
-#+begin_src jupyter-python
-import networkx as nx, numpy as np
-def make_graph(n: int, config: Config) -> nx.Graph:
-    node_roles = []
-    node_states = []
-    for role in roles:
-        for idx in range(n // len(roles)):
-            node_roles.append(role)
-            s = "C"
-            if np.random.rand() < 0.5:
-                s = "D"
-            node_states.append(s)
-
-    g = nx.complete_graph(n)
-    R = { node: role for node, role in enumerate(node_roles) }
-    S = {node: state for node, state in enumerate(node_states)}
-    nx.set_node_attributes(g, R, "role")
-    nx.set_node_attributes(g, S, "state")
-
-    return g
-
-
-def simulate(t, g, config) -> nx.Graph:
-    n = len(g)
-    states = []
-    for ti in range(t):
-        agent = np.random.randint(0, n)
-        new_strat = fermi_update(agent, g,  payoff = config.payoff, roles = config.roles,
-             role_map = config.role_map, beta = config.beta)
-        g.nodes[agent]["state"] = new_strat
-        states.append(g.copy())
-    return states
-
-#+end_src
-
-#+RESULTS:
+I  start by  spawning  $Z =  100$  agents using  homogeneous
+mixing.  From  a  network  perspective this  is  similar  to
+connecting  every  agent  with every  other  agent  (no-self
+edge).  Using update  rule in  [[table:payoff]], I  start by
+simulating for $b_s =  c_a = 1$ with $b_m =  0$. A priori, I
+would expect  that the four  point interaction $CCCC$  has a
+slight benefit over all other  possible states as there is a
+net   negative  for   most  other   configurations  of   the
+simulation.  The  conformers  over  time  are  visualize  in
+[[fig:conformer_t=1000]]  and a  snapshot  of the  state  per role  is
+visualized in [[fig:snapshot_t=1000]]
 
 #+name: setup simulation
 #+begin_src jupyter-python
-df = pd.read_csv("./test.csv", header = None, skiprows = 2)
-roles = "Production Distribution Management Civilian".split()
-categories = "Roles Benefits Costs".split()
-names = [(j, i) for j in categories for i in roles]
-names = pd.MultiIndex.from_tuples(
-    names
-)
-df.columns = names
+from boiler_room import read_data, make_graph, simulate
+config = read_data("./test.csv", beta = 1)
 
-role_map = { role: idx for idx, role in enumerate(roles) }
-payoff = {}
-for idx, row in df.Roles.iterrows():
-    state = "".join(i for i in [row.Production, row.Distribution, row.Management, row.Civilian])
-    payoff[state] = Payoff(benefits=df.Benefits.iloc[idx].values, costs= df.Costs.iloc[idx].values)
-
-config = Config(payoff = payoff,
-                role_map = role_map,
-                roles = roles,
-                beta = 1.0)
-
-g = make_graph(100, config)
-g_orig = g.copy()
-T = 1000
+Z, T = 100,500
+g = make_graph(Z, config)
 states = simulate(t = T, g = g, config = config)
-pos = nx.random_layout(g)
-
 #+end_src
 
-#+RESULTS: setup simulation
-
-#+name: plotting results
+#+name: fig:conformer_t=1000
 #+begin_src jupyter-python
-import proplot as plt
+import numpy as np, proplot as plt
+tmp = np.zeros((len(states), len(config.roles)))
+for idx, state in enumerate(states):
+    for node in state.nodes():
+        s = state.nodes[node]["state"]
+        role = state.nodes[node]["role"]
+        if s == "C":
+            tmp[idx, config.role_map[role]] += 1 / (len(g)//len(config.roles))
 
-def plot_graph(g, ax):
-    for marker, role in zip(markers, roles):
-        sublist = [node  for node in g.nodes() if g.nodes[node]["role"] == role]
-        C = [colors[0] if g.nodes[node]["state"] == "C" else colors[1] for node in sublist]
-        nx.draw_networkx_nodes(g, ax = ax, pos = pos,
-                            node_shape = marker,
-                            nodelist = sublist,
-                            node_size = 12,
-                            node_color= C)
+fig, ax = plt.subplots()
+for data, label in zip(tmp.T, config.roles):
+    ax.plot(data, label = label)
+ax.format(xlabel = "Time(step)", ylabel = r"Frac. Conformers ($\frac{x}{(Z_{group}}$)")
+ax.legend(loc = 'r', ncols = 1)
+# ax.set_ylim(0, 1)
+# ax.axhline(0.25, ls = "dashed", color = 'lightgray')
+ax.set_title(fr"Conformers over time (Z = {Z}, $\beta$={config.beta})")
+fig.show()
+#+end_src
 
 
-    nx.draw_networkx_edges(g, pos, ax = ax, alpha = 0.05)
 
-
+#+name: fig:snapshot_t=1000
+#+begin_src jupyter-python
+%load_ext autoreload
+%autoreload 2
+import networkx as nx, proplot as plt
+from boiler_room import plot_graph
 
 markers = "os^v"
-colors = "darkorange cadetblue orange yellow".split()
+colors = ["steelblue", "red"]
+pos = nx.kamada_kawai_layout(g)
 fig, (left, right) = plt.subplots(ncols = 2)
-plot_graph(states[0], right)
-plot_graph(states[-1], left)
+
+plot_graph(states[0], ax = left, config = config, markers = markers, colors = colors)
+plot_graph(states[T-1], ax = right, config = config, markers = markers, colors = colors)
+
 left.set_title("T = 0")
-right.set_title(f"T = {T}")
+right.set_title(f"T = {T-1}")
 
 fig.format(grid = False)
 labels = [plt.pyplot.Line2D([], [], marker = marker,
-                      ls = "none", label = label, color = "k") for marker, label in zip(markers, roles)]
+                      ls = "none", label = label, color = "k") for marker, label in zip(markers, config.roles)]
 state_marker = [plt.pyplot.Line2D([], [], marker = "o",
                       ls = "none", label = label, color = color) for color, label in zip(colors,"C D".split())]
 fig.legend(handles = labels, loc = "t")
 fig.legend(handles = state_marker, loc = "b")
 fig.show()
 #+end_src
-
-#+RESULTS: plotting results
+#+RESULTS: fig:snapshot_t=1000
 :RESULTS:
-: /tmp/ipykernel_163944/2299970726.py:33: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
+: The autoreload extension is already loaded. To reload it, use:
+:   %reload_ext autoreload
+: /tmp/ipykernel_26640/4277905585.py:24: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
 :   fig.show()
 #+attr_org: :width 525 :height 375
-[[file:./.ob-jupyter/e19c9e19caa93aeb10329c74f688cd83aa419581.png]]
+[[file:./.ob-jupyter/035d9adc5c9081d9617f9279ed5ce0cd5576016a.png]]
 :END:
 
 #+begin_src jupyter-python
-Z = np.zeros((len(states), len(roles)))
-for idx, state in enumerate(states):
-    for node in state.nodes():
-        s = state.nodes[node]["state"]
-        role = state.nodes[node]["role"]
-        if s == "C":
-            Z[idx, role_map[role]] += 1 / len(g)
+import proplot as plt, numpy as np
+e = np.linspace(-10, 10)
+p = 1 / (1 + np.exp(-e))
 
 fig, ax = plt.subplots()
-ax.plot(Z)
-ax.format(xlabel = "Time(step)", ylabel = "Frac. Conformers (x/Z)")
-ax.set_title("Conformers over time (Z = 100)")
+ax.plot(e, p)
+ax.format(xlabel = "E", ylabel = "P(E)")
 fig.show()
 #+end_src
 
 #+RESULTS:
+:RESULTS:
+: /tmp/ipykernel_31414/2173492732.py:8: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
+:   fig.show()
+#+attr_org: :width 312 :height 300
+[[file:./.ob-jupyter/25058265cb746466bc0045b9dca37e7e077409e3.png]]
+:END:
+
+- change payoff to the fractions of the individuals
+- Show dynamics of the simple game.
+- Custer roles
+- keep payoff simple
+- risk proportional to your degree?

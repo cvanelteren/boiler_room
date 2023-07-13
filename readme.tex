@@ -1,4 +1,4 @@
-% Created 2023-06-19 Mon 12:11
+% Created 2023-06-19 Mon 13:04
 % Intended LaTeX compiler: pdflatex
 \documentclass[a4paper, 11pt, twocolumn]{article}
 \usepackage[utf8]{inputenc}
@@ -25,7 +25,7 @@
 
 
 \section{Background}
-\label{sec:orgd28b8e4}
+\label{sec:org9b3ac05}
 \begin{itemize}
 \item Criminal organizations form dangers to society and rule of law
 \item Most criminal studies are performed in an observational capacity
@@ -36,7 +36,7 @@ to study the consequences of theories in criminal science
 \end{itemize}
 
 \section{Aim of the study}
-\label{sec:orge5801de}
+\label{sec:orga60268a}
 Produce a computational model rooted in game theory to study
 the  emergent  properties  of   success  supply  chain  of
 criminal markets in society.
@@ -53,7 +53,7 @@ be represented as heath bath of the system.
 
 
 \section{The model}
-\label{sec:org9d1612b}
+\label{sec:org9378a91}
 Let \(\sigma_i^X \in \{ 0, 1  \} = \{\textrm{do not perform criminal
 act}, \textrm{perform criminal act}  \}\) denote the state of
 agent \(i\) with roles  category \(X \in \{ \textrm{Production)},
@@ -71,7 +71,7 @@ decide to participate or not in  a criminal act based on the
 state of the local connections.
 
 \section{The pay-off matrix}
-\label{sec:orgb49807d}
+\label{sec:orgf7f8751}
 We  are  interested  in  studying  the  interaction  between
 successful criminal supply chains  and citizens. The maximum
 pay-off for a criminal organization is to have a functioning
@@ -93,8 +93,8 @@ supply chain (production, distribution, management)
 chain with customers
 \item \(c_a\) detection cost of committing crime
 
-\begin{table}[htbp]
-\caption{Supply chain pay-off. Note empty cell indicate no pay-off.}
+\begin{table*}[htbp]
+\caption{\label{table:payoff}Supply chain pay-off. Note empty cell indicate no pay-off.}
 \centering
 \begin{tabular}{llllllll}
 Roles &  &  &  & Pay-off &  &  & \\[0pt]
@@ -118,14 +118,14 @@ D & D & D & D &  &  &  & \\[0pt]
 D & D & C & D &  &  & \(c_a\) & \\[0pt]
 D & D & D & D &  &  &  & \\[0pt]
 \end{tabular}
-\end{table}
+\end{table*}
 \end{itemize}
 
 
 
 
 \section{Evolutionary Dynamics}
-\label{sec:org88a29e8}
+\label{sec:orgf5e224b}
 We  evaluate the  evolutionary dynamics  by using  the Fermi
 update. Let \(x\) denote the  flip probability for an agent of
 moving from  strategy \(i  \to j\)  or vice  versa, then  we can
@@ -147,14 +147,34 @@ and their strategy  approaches a random choice  to defect or
 conform.
 
 \section{Simulation}
-\label{sec:orgf693e14}
+\label{sec:orgadedffe}
+I  start by  spawning  \(Z =  100\)  agents using  homogeneous
+mixing.  From  a  network  perspective this  is  similar  to
+connecting  every  agent  with every  other  agent  (no-self
+edge).  Using update  rule in  \ref{table:payoff}, I  start by
+simulating for \(b_s =  c_a = 1\) with \(b_m =  0\). A priori, I
+would expect  that the four  point interaction \(CCCC\)  has a
+slight benefit over all other  possible states as there is a
+net   negative  for   most  other   configurations  of   the
+simulation.  The  conformers  over  time  are  visualize  in
+\ref{orgfa8fe42}  and a  snapshot  of the  state  per role  is
+visualized in \ref{org19b422b}
 
 \begin{verbatim}
-/tmp/ipykernel_163944/455593508.py:33: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
+/tmp/ipykernel_163944/166041059.py:35: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
   fig.show()
 \end{verbatim}
 
 \begin{center}
-\includegraphics[width=.9\linewidth]{./.ob-jupyter/50c9a50fc08ab6f6cd64bc52414cb90b50e12541.png}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/35dee83bca8728e70461a779299e9435fe6836f6.png}
+\end{center}
+
+\begin{verbatim}
+/tmp/ipykernel_163944/297734793.py:17: UserWarning: Matplotlib is currently using module://matplotlib_inline.backend_inline, which is a non-GUI backend, so cannot show the figure.
+  fig.show()
+\end{verbatim}
+
+\begin{center}
+\includegraphics[width=.9\linewidth]{./.ob-jupyter/5fc88edd36c66eec94fa66ce3ca3807fbb23ac92.png}
 \end{center}
 \end{document}
