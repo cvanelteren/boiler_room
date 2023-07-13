@@ -20,9 +20,7 @@ type State* = ref object of Config
 proc makeAgent*(id: int, state: State): Agent =
   result = Agent(id: id, neighbors: @[],
                  role: state.roles.sample,
-                 state: 1.0
-                 )
-                 # state: state.states.sample)
+                 state: state.states.sample)
 
 proc makeSimulation*(config: Config): State =
   result = State(states: config.states,
