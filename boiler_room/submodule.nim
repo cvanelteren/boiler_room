@@ -3,4 +3,5 @@
 # remove this file altogether. You may create additional modules alongside
 # this file as required.
 
-proc getWelcomeMessage*(): string = "Hello, World!"
+proc getWelcomeMessage*(): string =
+  "Hello, World!"

@@ -1,28 +1,27 @@
-import std/[sequtils, random, math, strutils, strformat, strutils, tables, sequtils, terminal]
+import std/[sequtils, random, math, strutils,
+            strformat, strutils, tables, sequtils, terminal]
 import nimpy
 
-# randomize()
 type Agent* = ref object
-  id: int
-  state: float
-  role: string
-  neighbors: seq[Agent]
-  bias: float
+  id*: int
+  state*: float
+  role*: string
+  neighbors*: seq[ptr Agent]
+  trust*: Table[int, float]
+  bias*: float
 
 type Config* = ref object of RootObj
-  g*: PyObject
   states*: seq[float]
   roles*: seq[string]
-  beta*, benefit*, cost*: float
+  alpha*, beta*, benefit*, cost*: float
 
-type State* = object of Config
-  agents: seq[Agent]
 
-proc makeAgent*(id: int, state: State): Agent =
-  result = Agent(id: id, neighbors: @[],
-                 role: state.roles.sample,
-                 state: state.states.sample,
-                 bias: 0.0)
+type State* = ref object of Config
+  agents*: seq[Agent]
+  rng*: Rand
+
+# proc `echo`*(agent: Agent) =
+  # echo &"ID: {agent.id}\n State: {agent.state}\nnumber of neighbors: {agent.neighbors.len}"
 
 proc makeSimulation*(config: Config): State =
   result = State(states: config.states,
@@ -30,38 +29,62 @@ proc makeSimulation*(config: Config): State =
                  benefit: config.benefit,
                  cost: config.cost,
                  beta: config.beta,
-                 g: config.g,
+                 alpha: config.alpha,
                  agents: @[],
   )
+
+proc makeAgent*(id: int, state: State): Agent =
+  result = Agent(id: id, neighbors: @[],
+                 role: state.roles.sample,
+                 state: state.states.sample,
+                 bias: 0.0,
+                 trust: initTable[int, float]())
+
+proc makeNetwork*(state: var State, g: PyObject) =
   # add agents
-  for node in config.g.nodes():
-    result.agents.add makeAgent(node.to(int), result)
-    let tmp = config.g.nodes[node].to Table[string, PyObject]
+  for node in g.nodes():
+    state.agents.add makeAgent(node.to(int), state)
+    let tmp = g.nodes[node].to Table[string, PyObject]
     for key, value in tmp:
       if key == "role":
-        result.agents[^1].role = value.to string
-        assert result.agents[^1].role == value.to string
+        state.agents[^1].role = value.to string
+        assert state.agents[^1].role == value.to string
       elif key == "state":
-        result.agents[^1].state = value.to float
+        state.agents[^1].state = value.to float
       elif key == "bias":
-        result.agents[^1].bias = value.to float
+        state.agents[^1].bias = value.to float
 
-  for edge in config.g.edges():
+  for edge in g.edges():
     let x = edge[0].to int
     let y = edge[1].to int
     if x == y:
       continue
-    result.agents[x].neighbors.add result.agents[y]
-    if not config.g.is_directed().to bool:
-        result.agents[y].neighbors.add result.agents[x]
+    state.agents[x].neighbors.add state.agents[y].addr
+    state.agents[x].trust[state.agents[y].id] = 1.0
+    if not g.is_directed().to bool:
+        state.agents[y].neighbors.add state.agents[x].addr
+        state.agents[y].trust[state.agents[x].id] = 1.0
 
+
+# not a real cdf but sample can deal with counts
+proc getTrustCDF*(agent: Agent): seq[float] = agent.neighbors.mapIt(agent.trust[it.id]).cumsummed
 
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
   # assume that 0 index is the current agent energy
   result = state.benefit * interactions.prod - state.cost * interactions[0] + interactions[0] * agent.bias
 
-proc fermiUpdate*(delta, beta: float): float =
+proc fermiUpdate*(delta, beta: float): float {.exportpy.} =
   result = 1.0 / (1.0 + exp(-beta * delta))
+
+proc updateTrust*(agent: Agent, alpha: float) =
+  if alpha > 0:
+    # update trust only if agent state is the same as the neighbor
+    for neighbor in agent.neighbors:
+      if neighbor.state == agent.state:
+        agent.trust[neighbor.id] *= (1 + alpha)
+      else:
+        agent.trust[neighbor.id] *= (1 - alpha)
+
 
 proc update(state: var State, id: int, order = 3) =
   if order < 1:
@@ -70,6 +93,7 @@ proc update(state: var State, id: int, order = 3) =
   let agent = state.agents[id]
   var
     roles: seq[string] = @[agent.role]
+    ids: seq[int] = @[agent.id]
     interactions: seq[float] = newSeqWith(order, 0.0)
     idx = 0
 
@@ -77,12 +101,14 @@ proc update(state: var State, id: int, order = 3) =
 
   # shuffle iteration
   # TODO: bin the roles of the neighbors in to group
-  agent.neighbors.shuffle()
+
+  let cdf = agent.getTrustCDF
 
   while roles.len < (order) and idx < agent.neighbors.len:
-    let other = agent.neighbors[idx]
-    if other.role notin roles:
+    let other = state.rng.sample(agent.neighbors, cdf = cdf)
+    if other.role notin roles and other.id notin ids:
       interactions[roles.len] = other.state
+      ids.add other.id
       roles.add other.role
     idx.inc
 
@@ -95,9 +121,10 @@ proc update(state: var State, id: int, order = 3) =
       result = 1/(n - 1)
 
   let ps = state.states.mapIt(
-    filter(it, agent.state, state.states.len)).cumsummed
+    filter(it, agent.state, state.states.len))
 
-  interactions[0] = state.states.sample(ps)
+  interactions[0] = state.rng.sample(state.states, ps.cumsummed)
+  # echo state.states.sample(ps.cumsummed), ps
   assert interactions[0] != agent.state
   var flipEnergy = agent.energy(interactions, state)
 
@@ -106,14 +133,14 @@ proc update(state: var State, id: int, order = 3) =
   # echo &"{p=} {delta=} {currentEnergy=} {flipEnergy=}"
   if rand(1.0) < p:
     agent.state = interactions[0]
+  agent.updateTrust(state.alpha)
 
-proc makeExport(states: seq[State]): PyObject=
+proc makeExport*(states: seq[State]): PyObject=
   let pd = pyImport("pandas")
   result = pd.DataFrame()
   for idx, state in states:
     let data =  @[(state: state.agents.mapIt(it.state),
                  roles: state.agents.mapIt(it.role),
-                 g: state.g,
                  beta: state.beta )]
     let tmp = pd.DataFrame(data = data, columns = "state roles g beta".split)
     result = pd.concat((result, tmp))
@@ -123,20 +150,17 @@ proc makeExport(states: seq[State]): PyObject=
 proc simulate*(state: var State, t: int): seq[State] =
   var agents = (0..<state.agents.len).toSeq
 
+  # keep diffs for copy
   for ti in 0..<t:
-    let i = ((ti / t) * 100).toInt
-    # stdout.styledWriteLine(fgRed, "0% ", fgWhite, '#'.repeat i, if i > 50: fgGreen else: fgYellow, "\t", $i , "%")
-    # cursorUp 1
-    # eraseLine()
-    agents.shuffle()
     result.add deepcopy(state)
+
     # let agent = rand(state.agents.len - 1)
+    # state.update(agent)
+
+    state.rng.shuffle(agents)
     for agent in agents:
       state.update(agent)
 
-    # for agent in agents:
-      # state.update(agent)
-      # let agent = rand(state.agents.len - 1)
 
 proc `echo`*(config: Config) =
   echo '-'.repeat(16), " Parameters ", '-'.repeat(16)
@@ -145,11 +169,12 @@ proc `echo`*(config: Config) =
 
 proc run*(parameters: PyObject): PyObject {.exportpy.} =
   # @parameters should contain a dict
-  echo "Parsing input"
+  # echo "Parsing input"
   var config = Config(states: @[0.0, 1.0],
                      roles: "Production Distribution Management".split,
                      beta: 1.0,
                      cost: 1.0,
+                     alpha: 1.0,
                      benefit: 1.0)
 
   var parameters = parameters.to Table[string, PyObject]
@@ -164,6 +189,8 @@ proc run*(parameters: PyObject): PyObject {.exportpy.} =
   if "t" in parameters:
     t = parameters["t"].to int
 
-  echo config
-  echo &"Running simulation {t=}"
+  # echo config
+  # echo &"Running simulation {t=}"
+
+
   result = makeExport(state.simulate(t))
