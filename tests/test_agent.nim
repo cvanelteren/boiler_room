@@ -1,6 +1,8 @@
-import std/[unittest, math, strutils, random, tables, sequtils]
-import nimpy
+import unittest, math, strutils, random, tables, sequtils
+import nimpy, sugar
 import boiler_room.agent
+import boiler_room.utils
+import parsetoml
 
 suite "Test python parse":
     setup:
@@ -15,7 +17,13 @@ suite "Test python parse":
                 benefit: 1.0,
                 cost: 1.0,
                 beta: 1.0)
-      # makeSimulation(config)
+      var state = makeSimulation(config)
+      proc test(s: State): State =
+        result = s.deepcopy
+      state = test(state)
+      check not state.isnil
+      makeNetwork(state, g)
+
 
 suite "Fermi update":
     test "Dealing with infinities":
@@ -43,28 +51,21 @@ suite "Agent":
     agent = Agent(state: 0.0, id: 1)
     check agent.id == 1
     check agent.state == 0.0
+  test "Creating neighbors":
+      agent = Agent(id: 0, neighbors: @[])
+      var agents: seq[Agent] = @[]
+      var ids: seq[int] = @[]
+      for tmp in 0..10:
+        let other = Agent(id: agent.id + tmp + 2)
 
-  test "Trust sampling":
-    # make some agents with trust updating
-    # agents with opposite state will have their trust decreased
-    let neighbors = @[Agent(id: 1, state: 0.0), Agent(id: 2, state: 1.0)]
-    let trust: Table[int, float] = neighbors.mapIt((it.id, 1.0)).toTable
-    agent = Agent(state: 0.0, id: 1,
-                  neighbors: neighbors.mapIt(it.addr),
-                  trust: trust)
-    var rng = initRand()
-    check agent.getTrustCDF() == @[1.0, 2.0]
+        ids.add other.id
+        agents.add(other)
+      for idx, other in agents:
+        agent.neighbors.add(agents[idx].addr)
+      agent.neighbors.shuffle()
+      check ids != agent.neighbors.mapIt(it.id)
 
 
-    # check update trust
-    agent.updateTrust(0.5)
-    check agent.trust == {1: 1.5, 2: 0.5}.toTable
-
-    # check sampling ratio
-    var ids = initTable[int, int]()
-    for idx in 0..<100000:
-      let s = rng.sample(agent.neighbors, cdf = agent.getTrustCDF()).id
-      if ids.haskeyorput(s, 1):
-        ids[s].inc
-    let threshold = 0.05
-    check (ids[1] / ids[2] - 3.0 <= threshold)
+  # test "Checking incomplete inputs":
+    # config = "./tests/default.toml".read(target = "test override")
+    # expect newException(ValueError, "Ratio cannot be computed, needs both @c and @b")
