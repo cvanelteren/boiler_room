@@ -52,19 +52,18 @@ suite "Agent":
     check agent.id == 1
     check agent.state == 0.0
   test "Creating neighbors":
-      agent = Agent(id: 0, neighbors: @[])
+      agent = Agent(id: 0, neighbors: initTable[string, seq[ptr Agent]]())
       var agents: seq[Agent] = @[]
       var ids: seq[int] = @[]
       for tmp in 0..10:
-        let other = Agent(id: agent.id + tmp + 2)
-
-        ids.add other.id
+        let other = Agent(id: agent.id + tmp + 2, role: "test")
         agents.add(other)
-      for idx, other in agents:
-        agent.neighbors.add(agents[idx].addr)
-      agent.neighbors.shuffle()
-      check ids != agent.neighbors.mapIt(it.id)
+        agent.add_neighbor(agents[^1])
 
+      agent.neighbors["test"].shuffle()
+      check ids != agent.neighbors["test"].mapIt(it.id)
+
+      echo agent.neighbors["test"].mapIt(it.id)
 
   # test "Checking incomplete inputs":
     # config = "./tests/default.toml".read(target = "test override")

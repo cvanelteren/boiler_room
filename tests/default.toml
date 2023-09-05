@@ -1,0 +1,22 @@
+[general]
+t = 1
+z = 1
+n_trials = 1
+states = [0.0]
+roles = ["A"]
+p_states = [[0.0]]
+p_roles = [1.0]
+beta = 1.0
+ratio = 1.0
+seed = 1234
+
+["test override"]
+roles = ["B"]
+cost = 1.0
+benefit = 2.0
+
+["test ratio input"]
+ratio = 2.0
+
+["test fraction"]
+p_roles = [0.33333]
