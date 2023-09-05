@@ -173,10 +173,9 @@ proc simulate*(state: var State, t: int): seq[State] =
   for ti in 0..<t:
     result.add deepcopy(state)
 
-    # state.rng.shuffle(agents)
-    for agent in state.agents:
-      state.update(state.rng.rand(state.agents.len - 1))
-      # state.update(id)
+    state.rng.shuffle(agents)
+    for agent in agents:
+      state.update(agent)
 
 proc `echo`*(config: Config) =
   echo '-'.repeat(16), " Parameters ", '-'.repeat(16)
