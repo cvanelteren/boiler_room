@@ -1,7 +1,7 @@
-import unittest, tables, sequtils
+import unittest, tables, sequtils, random
 from boiler_room import agent, utils
 from boiler_room.utils import read
-from boiler_room.agent import makeState
+from boiler_room.agent import makeState, simulate
 
 
 
@@ -44,9 +44,6 @@ suite "Test state":
     for p in config.p_roles:
       z.add p * config.z.float
 
-
-
-
   test "Confirming stats":
       var roles = initTable[string, float]()
       var p_state = newSeqWith(config.roles.len,
@@ -70,3 +67,21 @@ suite "Test state":
       for (p, true_p) in p_state.zip(config.p_states):
         for (pi, true_pi) in p.zip(true_p):
           check (pi - true_pi).abs < 0.05
+
+  test "Sampling distribution agents":
+    let n = 1000000
+    var agents = initTable[int, float]()
+    for idx in 0..<n:
+      let id = state.rng.sample(state.agents).id
+      if agents.hasKeyOrPut(id, 1.0/n.float):
+        agents[id] += 1.0/n.float
+
+    check agents.len == state.agents.len
+    for k, v in agents:
+      check abs(v - 1/state.agents.len.float) < 0.001
+
+  test "Test agent reference":
+    let sample = state.agents[0].neighbors["Production"][^1]
+    state.agents[sample.id].state = 3.0
+    check state.agents[sample.id] == sample[]
+    check state.agents[sample.id].state == sample.state

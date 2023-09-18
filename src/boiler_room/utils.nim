@@ -4,7 +4,7 @@ type Config* = object of RootObj
   states*: seq[float]
   roles*: seq[string]
   alpha*, beta*, benefit*, cost*: float
-  trial*, n_trials*, t*, seed*, z*: int
+  n_samples*, trial*, n_trials*, t*, seed*, z*: int
   p_states*: seq[seq[float]]
   p_roles* : seq[float]
 
@@ -72,3 +72,7 @@ proc read*(fp: string, target: string = "general"): Config =
   result.n_trials = tmp["general"]["n_trials"].getInt()
   if "n_trials" in tmp[target]:
     result.n_trials = tmp[target]["n_trials"].getInt()
+
+  result.n_samples = tmp["general"]["n_samples"].getInt()
+  if "n_samples" in tmp[target]:
+    result.n_samples = tmp[target]["n_samples"].getInt()

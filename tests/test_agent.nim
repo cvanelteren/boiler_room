@@ -4,10 +4,10 @@ import boiler_room
 from boiler_room import agent
 import parsetoml
 
-suite "Test python parse":
-    setup:
-      # required
-      let nx = pyImport("networkx")
+# suite "Test python parse":
+#     setup:
+#       # required
+#       let nx = pyImport("networkx")
 
     # test "Make simulation":
     #   let g = nx.complete_graph(10)
@@ -51,20 +51,21 @@ suite "Agent":
     agent = Agent(state: 0.0, id: 1)
     check agent.id == 1
     check agent.state == 0.0
+
   test "Creating neighbors":
       agent = Agent(id: 0, neighbors: initTable[string, seq[ptr Agent]]())
-      var agents: seq[Agent] = @[]
-      var ids: seq[int] = @[]
-      for tmp in 0..10:
-        let other = Agent(id: agent.id + tmp + 2, role: "test")
-        agents.add(other)
-        agent.add_neighbor(agents[^1])
+      let n = 10
+      var agents = newSeq[Agent](n)
+      for id in 1..n:
+        var other = Agent(id: id, role: "test")
+        agents[id - 1] = other
+        agent.add_neighbor(agents[id-1])
 
-      agent.neighbors["test"].shuffle()
-      check ids != agent.neighbors["test"].mapIt(it.id)
+      agent.neighbors["test"].shuffle
+      for role, neighbors in agent.neighbors:
+        for neighbor in neighbors:
+          check neighbor.isnil == false
+          check neighbor.role == "test"
 
-      echo agent.neighbors["test"].mapIt(it.id)
-
-  # test "Checking incomplete inputs":
-    # config = "./tests/default.toml".read(target = "test override")
-    # expect newException(ValueError, "Ratio cannot be computed, needs both @c and @b")
+      check agent.neighbors["test"].sample().isnil == false
+      check agent.neighbors["test"].sample().id in agent.neighbors["test"].mapIt(it.id)
