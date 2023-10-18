@@ -1,10 +1,20 @@
 import sequtils, parsetoml
+import nimpy
 
 type Config* = object of RootObj
   states*: seq[float]
   roles*: seq[string]
+
   alpha*, beta*, benefit*, cost*: float
-  n_samples*, trial*, n_trials*, t*, seed*, z*: int
+  mu*: float # deprecated
+
+  rewire*: float
+  depth*:int
+  g*: PyObject
+
+  n_samples*, t*, seed*, z*: int
+  trial*, n_trials*: int
+
   p_states*: seq[seq[float]]
   p_roles* : seq[float]
 
@@ -76,3 +86,8 @@ proc read*(fp: string, target: string = "general"): Config =
   result.n_samples = tmp["general"]["n_samples"].getInt()
   if "n_samples" in tmp[target]:
     result.n_samples = tmp[target]["n_samples"].getInt()
+
+
+  result.mu = 0.0
+  if "mu" in tmp[target]:
+    result.mu = tmp[target]["mu"].getFloat()

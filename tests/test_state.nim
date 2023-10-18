@@ -29,7 +29,8 @@ suite "Test state":
     for node in g.nodes():
       let group = g.nodes[node]["block"].to int
       g.nodes[node]["role"] = config.roles[group]
-    var state = makeState(config, g)
+    config.g = g
+    var state = makeState(config)
 
     # utils
     var state_map = initTable[float, int]()

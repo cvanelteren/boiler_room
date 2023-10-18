@@ -69,3 +69,8 @@ suite "Agent":
 
       check agent.neighbors["test"].sample().isnil == false
       check agent.neighbors["test"].sample().id in agent.neighbors["test"].mapIt(it.id)
+
+  test "Agent property":
+    agent = Agent(n_samples: 3, state: -5.0)
+    check agent.n_samples == 3
+    check agent.state == -5.0

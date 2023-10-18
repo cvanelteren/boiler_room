@@ -11,11 +11,13 @@ type Agent* = ref object
   neighbors*: Table[string, seq[ptr Agent]]
   bias*: float
   n_samples*: int
+  trust*: ptr seq[seq[float]]
 
 type State* = object of Config
   agents*: seq[Agent]
   rng*: Rand
   p*: Table[string, Table[float, float]]
+  trust*: seq[seq[float]]
 
 proc get*(agents: seq[ref Agent]): seq[int] =
   result = agents.mapIt(it.id)
@@ -26,7 +28,7 @@ proc makeAgent*(id: int, state: State): Agent =
                  role: state.roles.sample,
                  state: state.states.sample,
                  bias: 0.0,
-                 n_samples:  1,
+                 n_samples:  state.n_samples,
                  )
 
 proc add_neighbor*(this: var Agent, other: var Agent, directed = false) =
@@ -64,13 +66,8 @@ proc makeNetwork*(state: var State, g: PyObject) =
     if "bias" in node_defaults:
       agent.bias = node_defaults["bias"].to float
 
-    # assign an explore rate
-    agent.n_samples = 1
-    if "n_samples" in node_defaults:
-      agent.n_samples = node_defaults["n_samples"].to int
+    # assign an explorg rate
     state.agents.add agent
-
-
 
   for edge in g.edges():
     let x = edge[0].to int
@@ -80,8 +77,7 @@ proc makeNetwork*(state: var State, g: PyObject) =
     state.agents[x].add_neighbor(state.agents[y],
                                  directed = g.is_directed().to bool)
 
-
-proc makeState*(config: Config, g: PyObject): State =
+proc makeState*(config: Config): State =
   # TODO: This way is error prone as the
   # default would be zeros for a value
   result = State(states: config.states,
@@ -98,48 +94,34 @@ proc makeState*(config: Config, g: PyObject): State =
                  seed: config.seed,
                  n_samples: config.n_samples,
                  agents: @[],
+                 trial: config.trial,
+                 rewire: config.rewire,
+                 depth: config.depth,
+                 mu: config.mu,
   )
   # add agents and connections
-  result.makeNetwork(g)
+  result.makeNetwork(config.g)
+  result.trust = newSeqWith(result.agents.len,
+                            newSeqWith( result.agents.len, 1.0)
+  )
+
+  for agent in result.agents:
+    agent.trust = result.trust.addr
+
 
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
   # assume that 0 index is the current agent energy
+  # result = state.benefit * 1/3.0 * interactions[0] * interactions[1]
+  # result += state.benefit * 1/3.0 * interactions[1] * interactions[2]
+  # result += state.benefit * 1/3.0 * interactions[0] * interactions[2]
+  # result -= state.cost * interactions[0]
   result = state.benefit * interactions.prod -
-    state.cost * interactions[0] +
-    interactions[0] * agent.bias
+    state.cost * interactions[0]
+
 
 proc fermiUpdate*(delta, beta: float): float {.exportpy.} =
   result = 1.0 / (1.0 + exp(-beta * delta))
-
-type Bundle = OrderedTable[string, OrderedTable[float, seq[ptr Agent]]]
-type Dist   = OrderedTable[string, OrderedTable[float, float]]
-
-proc newDist(): Dist =
-  result = initOrderedTable[string, OrderedTable[float, float]]()
-
-proc newBundle(): Bundle =
-  result = initOrderedTable[string, OrderedTable[float, seq[ptr Agent]]]()
-
-proc sense(agent: Agent): tuple[p: Dist, bundles: Bundle] =
-  # bundle the agents per role and create a distribution to sample from
-  # TODO: this can be very expensive and is kinda ridiculous. Since every update can be tracked
-  result = (p: newDist(),
-            bundles: newBundle()
-  )
-
-  for role, neighbors in agent.neighbors:
-    discard result.bundles.hasKeyOrPut(role, initOrderedTable[float, seq[ptr Agent]]())
-    discard result.p.hasKeyOrPut(role, initOrderedTable[float, float]())
-    # let z = 1/neighbors.len.float
-    for neighbor in neighbors:
-      # add neighbor
-      if result.bundles[role].hasKeyOrPut(neighbor.state, @[neighbor]):
-        result.bundles[role][neighbor.state].add neighbor
-
-      # update probability
-      if result.p[role].haskeyorput(neighbor.state, 1.0):
-        result.p[role][neighbor.state] += 1.0
-
+  # result = exp(-beta * delta)
 
 proc getPayoffDifference(agent: Agent,
                          interactions: var seq[float],
@@ -159,30 +141,29 @@ proc getPayoffDifference(agent: Agent,
   var flipEnergy = agent.energy(interactions, state)
   result = flipEnergy - currentEnergy
 
-
 # how many time to sample... sample until you get a hit?
-proc sample(agent: Agent, state: var State, order: int): float =
+proc sample(agent: Agent,
+            state: var State,
+            order: int,
+            sampled: var seq[ptr Agent]): float =
   # fermi update
   var
-    roles: seq[string] = @[agent.role]
     interactions: seq[float] = newSeqWith(order, 0.0)
-    idx = 0
+    idx = 1 # skip first index; only interested in neighborstates
   interactions[0] = agent.state
   # Create distribution of surrounding agent roles and states
   # let cdf = agent.sense()
   # echo cdf
   for role, neighbors in agent.neighbors:
     if role != agent.role:
+      let weights = neighbors.mapIt(agent.trust[agent.id][it.id] + 1e-6).cumsummed()
+      var other: ptr Agent
+      other = state.rng.sample(neighbors, weights)
+      interactions[idx] = other.state
+      sampled.add other
       idx.inc
-
-      # let criminalOrNot = state.rng.sample(cdf.p[role].keys.toseq,
-                                           # cdf.p[role].values.toseq.cumsummed())
-      # let sampledNeighbor = state.rng.sample(cdf.bundles[role][criminalOrNot])
-      # interactions[idx] = sampledNeighbor.state
-
-      interactions[idx] = state.rng.sample(neighbors).state
-
   result = agent.getPayoffDifference(interactions, state)
+
 
 
 proc update(state: var State, id: int, order = 3) =
@@ -191,23 +172,45 @@ proc update(state: var State, id: int, order = 3) =
   let agent = state.agents[id]
   var delta = 0.0
   let z = 1/(agent.n_samples.float)
+  var sampled: seq[ptr Agent] = @[]
   for sample in 0..<agent.n_samples:
-    delta += agent.sample(state, order)
-  let p = fermiUpdate(delta * z, state.beta)
+    delta += agent.sample(state, order, sampled)
+  let p  = fermiUpdate(delta * z, state.beta)
+
   if state.rng.rand(1.0) < p:
     if agent.state == 1.0:
       agent.state = 0.0
     else:
       agent.state = 1.0
 
+  # update trust levels
+  let zz = (agent.n_samples.float * (state.roles.len - 1).float)
+  for other in sampled:
+    var gain = 1.0/zz
+    if agent.state != other.state:
+      gain *= -1.0
+
+    agent.trust[agent.id][other.id] += gain
+    agent.trust[other.id][agent.id] += gain
+    if agent.trust[agent.id][other.id] <= 0.0:
+      agent.trust[agent.id][other.id] = 0.0
+
+    if agent.trust[other.id][agent.id] <= 0.0:
+      agent.trust[other.id][agent.id] = 0.0
+
+
 proc simulate*(state: var State, t: int): seq[State] =
   # keep diffs for copy
   var agents = (0..<state.agents.len).toseq
   result = newSeq[State](t)
+  var count = initCountTable[float]()
+  for agent in state.agents:
+    count.inc(agent.state)
   for ti in 0..<t:
     result[ti] = state.deepcopy()
-    state.rng.shuffle(agents)
-    for agent in agents:
+
+    for tmp in agents:
+      let agent = state.rng.sample(agents)
       state.update(agent)
 
 proc `echo`*(config: Config) =
