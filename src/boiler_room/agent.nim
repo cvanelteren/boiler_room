@@ -110,18 +110,12 @@ proc makeState*(config: Config): State =
 
 
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
-  # assume that 0 index is the current agent energy
-  # result = state.benefit * 1/3.0 * interactions[0] * interactions[1]
-  # result += state.benefit * 1/3.0 * interactions[1] * interactions[2]
-  # result += state.benefit * 1/3.0 * interactions[0] * interactions[2]
-  # result -= state.cost * interactions[0]
   result = state.benefit * interactions.prod -
     state.cost * interactions[0]
 
 
 proc fermiUpdate*(delta, beta: float): float {.exportpy.} =
   result = 1.0 / (1.0 + exp(-beta * delta))
-  # result = exp(-beta * delta)
 
 proc getPayoffDifference(agent: Agent,
                          interactions: var seq[float],
@@ -156,9 +150,9 @@ proc sample(agent: Agent,
   # echo cdf
   for role, neighbors in agent.neighbors:
     if role != agent.role:
-      let weights = neighbors.mapIt(agent.trust[agent.id][it.id] + 1e-6).cumsummed()
-      var other: ptr Agent
-      other = state.rng.sample(neighbors, weights)
+      # let weights = neighbors.mapIt(agent.trust[agent.id][it.id] + 1e-6).cumsummed()
+      # var other: ptr Agent = state.rng.sample(neighbors, weights)
+      let other = state.rng.sample(neighbors)
       interactions[idx] = other.state
       sampled.add other
       idx.inc
@@ -183,20 +177,18 @@ proc update(state: var State, id: int, order = 3) =
     else:
       agent.state = 1.0
 
-  # update trust levels
-  let zz = (agent.n_samples.float * (state.roles.len - 1).float)
-  for other in sampled:
-    var gain = 1.0/zz
-    if agent.state != other.state:
-      gain *= -1.0
-
-    agent.trust[agent.id][other.id] += gain
-    agent.trust[other.id][agent.id] += gain
-    if agent.trust[agent.id][other.id] <= 0.0:
-      agent.trust[agent.id][other.id] = 0.0
-
-    if agent.trust[other.id][agent.id] <= 0.0:
-      agent.trust[other.id][agent.id] = 0.0
+  # # update trust levels
+  # let zz = (agent.n_samples.float * (state.roles.len - 1).float)
+  # for other in sampled:
+  #   var gain = 1.0/zz
+  #   if agent.state != other.state:
+  #     gain *= -1.0
+  #   agent.trust[agent.id][other.id] += gain
+  #   agent.trust[other.id][agent.id] += gain
+  #   if agent.trust[agent.id][other.id] <= 0.0:
+  #     agent.trust[agent.id][other.id] = 0.0
+  #   if agent.trust[other.id][agent.id] <= 0.0:
+  #     agent.trust[other.id][agent.id] = 0.0
 
 
 proc simulate*(state: var State, t: int): seq[State] =
