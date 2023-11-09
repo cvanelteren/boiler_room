@@ -97,6 +97,7 @@ proc makeState*(config: Config): State =
                  trial: config.trial,
                  rewire: config.rewire,
                  depth: config.depth,
+                 assortativity: config.assortativity,
                  mu: config.mu,
   )
   # add agents and connections

@@ -9,6 +9,7 @@ type Config* = object of RootObj
   mu*: float # deprecated
 
   rewire*: float
+  assortativity*: float
   depth*:int
   g*: PyObject
 
