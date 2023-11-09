@@ -1,0 +1,33 @@
+* Welcome to the [[https://en.wikipedia.org/wiki/Boiler_Room_(film)][boiler room]]
+Source  code for  the  paper by  Casper  van Elteren,  Vitor
+Vasconcelos, Mike Lees and Paper Sloot (2023).
+
+
+** Installation instructions
+The source is  written in [[https://nim-lang.org/][Nim]], which writes  like python but
+is a compiled language. To  interface with the code, we need
+to  install it.  It is  recommended to  install Nim  through
+[[https://github.com/dom96/choosenim][choosenim]],  as that  piece  of software  allows for  version
+control. The current version is  developed using Nim 2.0 but
+it should be  compatible with 1.6.X. Make sure  Nim is added
+to your PATH variable.
+
+From the terminal, run
+
+#+begin_src shell
+choosenim stable
+git clone git@github.com:cvanelteren/boiler_room.git
+cd boiler_room
+nimble install
+#+end_src
+
+This  should  make  ~boiler_room~ available  as  a  package.
+Please explore the ~examples~ directory for some setup. Also
+note that this is scientific  code development. I attempt to
+keep  things  tidy  by having  unittests  available.  Things
+change all the time, and sometimes things break.
+
+** Python bridge
+It is  possible to  import nim  packages into  python, using
+[[https://github.com/Pebaz/nimporter][nimporter]]. The  current run scripts  are written in  Nim. If
+preferred, this patch can be taken.
