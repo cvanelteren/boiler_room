@@ -1,6 +1,6 @@
 * Welcome to the [[https://en.wikipedia.org/wiki/Boiler_Room_(film)][boiler room]]
 Source  code for  the  paper by  Casper  van Elteren,  Vitor
-Vasconcelos, Mike Lees and Paper Sloot (2023).
+Vasconcelos, Mike Lees and Peter Sloot (2023).
 
 
 ** Installation instructions
