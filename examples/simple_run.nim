@@ -29,7 +29,7 @@ if isMainModule:
   # we denote 0.0 for non-criminal, and 1.0 for criminal
   # @p_states, controls the probability of non-criminal (idx = 0),
   # and criminal (idx = 1) for each role ^
-  let p_states = @[@[0.5, 0.5], @[0.5, 0.5], @[0.05, 0.5]]
+  let p_states = @[@[0.5, 0.5], @[0.5, 0.5], @[0.5, 0.5]]
 
   # the core parameters that can influence the model are
   # beta: the noise parameter
