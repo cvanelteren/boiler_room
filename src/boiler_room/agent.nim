@@ -178,33 +178,16 @@ proc update(state: var State, id: int, order = 3) =
     else:
       agent.state = 1.0
 
-  # # update trust levels
-  # let zz = (agent.n_samples.float * (state.roles.len - 1).float)
-  # for other in sampled:
-  #   var gain = 1.0/zz
-  #   if agent.state != other.state:
-  #     gain *= -1.0
-  #   agent.trust[agent.id][other.id] += gain
-  #   agent.trust[other.id][agent.id] += gain
-  #   if agent.trust[agent.id][other.id] <= 0.0:
-  #     agent.trust[agent.id][other.id] = 0.0
-  #   if agent.trust[other.id][agent.id] <= 0.0:
-  #     agent.trust[other.id][agent.id] = 0.0
-
-
 proc simulate*(state: var State, t: int): seq[State] =
   # keep diffs for copy
   var agents = (0..<state.agents.len).toseq
   result = newSeq[State](t)
-  var count = initCountTable[float]()
-  for agent in state.agents:
-    count.inc(agent.state)
   for ti in 0..<t:
     result[ti] = state.deepcopy()
 
-    for tmp in agents:
-      let agent = state.rng.sample(agents)
-      state.update(agent)
+    agents.shuffle()
+    for agent in agents:
+        state.update(agent)
 
 proc `echo`*(config: Config) =
   echo '-'.repeat(16), " Parameters ", '-'.repeat(16)
