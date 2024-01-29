@@ -2,6 +2,7 @@ import unittest, math, strutils, random, tables, sequtils
 import nimpy, sugar
 import boiler_room
 from boiler_room import agent
+import boiler_room.agent
 import parsetoml
 
 # suite "Test python parse":
@@ -59,7 +60,7 @@ suite "Agent":
       for id in 1..n:
         var other = Agent(id: id, role: "test")
         agents[id - 1] = other
-        agent.add_neighbor(agents[id-1])
+        agent.addEdge(agents[id-1])
 
       agent.neighbors["test"].shuffle
       for role, neighbors in agent.neighbors:
@@ -69,6 +70,15 @@ suite "Agent":
 
       check agent.neighbors["test"].sample().isnil == false
       check agent.neighbors["test"].sample().id in agent.neighbors["test"].mapIt(it.id)
+
+      let numberOfNeighbors = agent.neighbors["test"].len
+
+      let prop = agent.neighbors["test"][0]
+      agent.rmEdge(prop[])
+      assert agent.neighbors["test"].len == numberOfNeighbors - 1
+      agent.addEdge(prop[])
+      assert agent.neighbors["test"].len == numberOfNeighbors
+
 
   test "Agent property":
     agent = Agent(n_samples: 3, state: -5.0)

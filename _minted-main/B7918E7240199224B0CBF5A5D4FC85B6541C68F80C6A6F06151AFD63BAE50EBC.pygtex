@@ -1,0 +1,36 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n+nb}{print}\PYG{p}{(}\PYG{l+s+s2}{\PYGZdq{}hello\PYGZdq{}}\PYG{p}{)}
+\PYG{c+c1}{\PYGZsh{}+end\PYGZus{}src python}
+
+
+\PYG{c+c1}{\PYGZsh{}+name: exact\PYGZus{}phase\PYGZus{}diagram}
+\PYG{c+c1}{\PYGZsh{}+caption: testing this out}
+\PYG{c+c1}{\PYGZsh{}+begin\PYGZus{}src jupyter\PYGZhy{}python}
+\PYG{k+kn}{import} \PYG{n+nn}{proplot} \PYG{k}{as} \PYG{n+nn}{plt}\PYG{o}{,} \PYG{n+nn}{cmasher} \PYG{k}{as} \PYG{n+nn}{cmr}\PYG{o}{,} \PYG{n+nn}{pandas} \PYG{k}{as} \PYG{n+nn}{pd}\PYG{o}{,}\PYGZbs{}
+    \PYG{n}{numpy} \PYG{k}{as} \PYG{n}{np}\PYG{p}{,} \PYG{n}{os}\PYG{p}{,} \PYG{n}{sys}\PYG{p}{,} \PYG{n}{networkx} \PYG{k}{as} \PYG{n}{nx}\PYG{p}{,} \PYG{n}{warnings}
+\PYG{n}{N} \PYG{o}{=} \PYG{l+m+mi}{100}
+\PYG{n}{bs} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mf}{0.00}\PYG{p}{,} \PYG{l+m+mi}{5}\PYG{p}{,} \PYG{n}{N}\PYG{p}{)}
+\PYG{n}{betas}  \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mf}{0.00}\PYG{p}{,} \PYG{l+m+mi}{5}\PYG{p}{,} \PYG{n}{N}\PYG{p}{)}
+
+\PYG{n}{mbetas}\PYG{p}{,} \PYG{n}{mbs} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{meshgrid}\PYG{p}{(}\PYG{n}{betas}\PYG{p}{,} \PYG{n}{bs}\PYG{p}{)}
+\PYG{n}{x} \PYG{o}{=} \PYG{l+m+mf}{0.1}
+\PYG{c+c1}{\PYGZsh{} e = e[..., \PYGZhy{}1]}
+\PYG{c+c1}{\PYGZsh{} e = e.sum(0)}
+\PYG{c+c1}{\PYGZsh{} e = e[:, :, 0]}
+
+\PYG{n}{fig}\PYG{p}{,} \PYG{n}{ax} \PYG{o}{=} \PYG{n}{plt}\PYG{o}{.}\PYG{n}{subplots}\PYG{p}{(}\PYG{n}{ncols} \PYG{o}{=} \PYG{l+m+mi}{2}\PYG{p}{,} \PYG{n}{nrows} \PYG{o}{=}  \PYG{l+m+mi}{2}\PYG{p}{)}
+\PYG{n}{ps} \PYG{o}{=} \PYG{p}{[}\PYG{l+m+mf}{0.6}\PYG{p}{,} \PYG{l+m+mf}{0.4}\PYG{p}{,} \PYG{l+m+mf}{0.2}\PYG{p}{,} \PYG{l+m+mi}{0}\PYG{p}{]}
+\PYG{k}{for} \PYG{n}{axi}\PYG{p}{,}  \PYG{n}{p} \PYG{o+ow}{in} \PYG{n+nb}{zip}\PYG{p}{(}\PYG{n}{ax}\PYG{p}{,} \PYG{n}{ps}\PYG{p}{):}
+    \PYG{n}{e} \PYG{o}{=} \PYG{n}{p} \PYG{o}{*} \PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{\PYGZhy{}} \PYG{n}{p}\PYG{p}{)} \PYG{o}{*} \PYG{p}{(}\PYG{l+m+mi}{2} \PYG{o}{\PYGZhy{}} \PYG{n}{p}\PYG{p}{)} \PYG{o}{*} \PYG{l+m+mi}{1}\PYG{o}{/}\PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{+} \PYG{n}{np}\PYG{o}{.}\PYG{n}{exp}\PYG{p}{(}\PYG{n}{mbetas} \PYG{o}{*} \PYG{l+m+mi}{1}\PYG{p}{))} \PYG{o}{+} \PYG{p}{(}\PYG{l+m+mi}{1}\PYG{o}{\PYGZhy{}}\PYG{n}{p}\PYG{p}{)}\PYG{o}{**}\PYG{l+m+mi}{3} \PYG{o}{*} \PYG{l+m+mi}{1}\PYG{o}{/}\PYG{p}{(}\PYG{l+m+mi}{1}\PYG{o}{+}\PYG{n}{np}\PYG{o}{.}\PYG{n}{exp}\PYG{p}{(}\PYG{o}{\PYGZhy{}}\PYG{n}{mbetas} \PYG{o}{*} \PYG{p}{(}\PYG{n}{mbs} \PYG{o}{\PYGZhy{}} \PYG{l+m+mi}{1}\PYG{p}{)))}
+    \PYG{n}{h} \PYG{o}{=} \PYG{n}{axi}\PYG{o}{.}\PYG{n}{imshow}\PYG{p}{(}\PYG{n}{e}\PYG{p}{,}
+          \PYG{n}{cmap} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}viridis\PYGZdq{}}\PYG{p}{,}
+          \PYG{c+c1}{\PYGZsh{} interpolation = \PYGZdq{}bicubic\PYGZdq{},}
+          \PYG{n}{vmin} \PYG{o}{=} \PYG{l+m+mi}{0}\PYG{p}{,} \PYG{n}{vmax} \PYG{o}{=} \PYG{l+m+mi}{1}\PYG{p}{,}
+          \PYG{n}{extent} \PYG{o}{=} \PYG{p}{[}\PYG{n}{betas}\PYG{o}{.}\PYG{n}{min}\PYG{p}{(),} \PYG{n}{betas}\PYG{o}{.}\PYG{n}{max}\PYG{p}{(),} \PYG{n}{ratios}\PYG{o}{.}\PYG{n}{min}\PYG{p}{(),} \PYG{n}{ratios}\PYG{o}{.}\PYG{n}{max}\PYG{p}{()],}
+          \PYG{n}{origin} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}lower\PYGZdq{}}\PYG{p}{,}
+          \PYG{p}{)}
+    \PYG{n}{axi}\PYG{o}{.}\PYG{n}{set\PYGZus{}title}\PYG{p}{(}\PYG{l+s+sa}{rf}\PYG{l+s+s2}{\PYGZdq{}\PYGZdl{}\PYGZbs{}frac}\PYG{l+s+se}{\PYGZob{}\PYGZob{}}\PYG{l+s+s2}{C}\PYG{l+s+se}{\PYGZcb{}\PYGZcb{}\PYGZob{}\PYGZob{}}\PYG{l+s+s2}{N}\PYG{l+s+se}{\PYGZcb{}\PYGZcb{}}\PYG{l+s+s2}{\PYGZdl{} = }\PYG{l+s+si}{\PYGZob{}}\PYG{n}{p}\PYG{l+s+si}{:}\PYG{l+s+s2}{0.1f}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}}\PYG{p}{)}
+\PYG{n}{ax}\PYG{o}{.}\PYG{n}{grid}\PYG{p}{(}\PYG{k+kc}{False}\PYG{p}{)}
+\PYG{n}{fig}\PYG{o}{.}\PYG{n}{colorbar}\PYG{p}{(}\PYG{n}{h}\PYG{p}{,} \PYG{n}{loc} \PYG{o}{=} \PYG{l+s+s1}{\PYGZsq{}r\PYGZsq{}}\PYG{p}{,} \PYG{n}{label} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}Fraction of Defectors\PYGZdq{}}\PYG{p}{)}
+\PYG{n}{fig}\PYG{o}{.}\PYG{n}{show}\PYG{p}{()}
+\end{Verbatim}

@@ -1,0 +1,34 @@
+<mxfile host="Electron" modified="2023-08-17T08:37:21.441Z" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.6.8 Chrome/114.0.5735.289 Electron/25.5.0 Safari/537.36" etag="d4u-xwp-qEBoEWLPXvSU" version="21.6.8" type="device">
+  <diagram name="Page-1" id="HcMxNdrDVx2QeGY1W9YA">
+    <mxGraphModel dx="1430" dy="874" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="1" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-7" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;curved=1;" edge="1" parent="1" source="ZINSdQxXfOy3tc3xe-H9-1" target="ZINSdQxXfOy3tc3xe-H9-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-12" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;curved=1;" edge="1" parent="1" source="ZINSdQxXfOy3tc3xe-H9-1" target="ZINSdQxXfOy3tc3xe-H9-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-1" value="$$x_r$$" style="rounded=1;whiteSpace=wrap;html=1;rotation=-90;fillColor=#7eb2fb;strokeColor=#6c8ebf;fontSize=40;" vertex="1" parent="1">
+          <mxGeometry x="310" y="285" width="175" height="78.75" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-3" value="$$x_r + \frac{1}{N}$$" style="rounded=1;whiteSpace=wrap;html=1;rotation=-90;fillColor=#3789fb;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="430" y="285" width="175" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-8" value="$$T^{-}$$" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="310" y="170" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-9" value="$$T^{+}$$" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="430" y="170" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-10" value="$$x_r - \frac{1}{N}$$" style="rounded=1;whiteSpace=wrap;html=1;rotation=-90;fillColor=#d6e7ff;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="190" y="285" width="175" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ZINSdQxXfOy3tc3xe-H9-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="ZINSdQxXfOy3tc3xe-H9-1" target="ZINSdQxXfOy3tc3xe-H9-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

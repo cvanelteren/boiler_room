@@ -1,0 +1,5 @@
+# NIMPORTER BUNDLE
+include nim-extensions/src.boiler_room/nimbase.h
+include nim-extensions/src.boiler_room.agent/nimbase.h
+include nim-extensions/src.boiler_room.submodule/nimbase.h
+include nim-extensions/tests.test_agent/nimbase.h

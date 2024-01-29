@@ -86,3 +86,12 @@ suite "Test state":
     state.agents[sample.id].state = 3.0
     check state.agents[sample.id] == sample[]
     check state.agents[sample.id].state == sample.state
+
+  # test "Adding edges":
+  #     var prop = state.agents[0]
+  #     var other = prop.neighbors["Distribution"][0]
+  #     var numberOfNeighbors = prop.neighbors["Distribution"].len
+  #     prop.rmEdge(state.agents[prop.id])
+  #     assert prop.neighbors["Distribution"].len == numberOfNeighbors - 1
+  #     prop.addEdge(state.agents[prop.id])
+  #     assert prop.neighbors["Distribution"].len == numberOfNeighbors
