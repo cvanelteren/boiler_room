@@ -15,6 +15,7 @@ type Config* = object of RootObj
 
   n_samples*, t*, seed*, z*: int
   trial*, n_trials*: int
+  step*: int
 
   p_states*: seq[seq[float]]
   p_roles* : seq[float]
@@ -87,6 +88,11 @@ proc read*(fp: string, target: string = "general"): Config =
   result.n_samples = tmp["general"]["n_samples"].getInt()
   if "n_samples" in tmp[target]:
     result.n_samples = tmp[target]["n_samples"].getInt()
+
+  result.step = tmp["general"]["N"].getInt()
+  if "N" in tmp[target]:
+    result.step = tmp[target]["N"].getInt()
+
 
 
   result.mu = 0.0
