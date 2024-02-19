@@ -81,11 +81,11 @@ suite "Test state":
     for k, v in agents:
       check abs(v - 1/state.agents.len.float) < 0.001
 
-  test "Test agent reference":
-    let sample = state.agents[0].neighbors["Production"][^1]
-    state.agents[sample.id].state = 3.0
-    check state.agents[sample.id] == sample[]
-    check state.agents[sample.id].state == sample.state
+  # test "Test agent reference":
+  #   let sample = state.agents[0].neighbors["Production"][^1]
+  #   state.agents[sample.id].state = 3.0
+  #   check state.agents[sample.id] == sample[]
+  #   check state.agents[sample.id].state == sample.state
 
   # test "Adding edges":
   #     var prop = state.agents[0]

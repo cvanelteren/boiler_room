@@ -41,6 +41,7 @@ suite "Fermi update":
 suite "Agent":
   setup:
     var agent: Agent
+
   test "Make null agent":
     agent = Agent()
     check not agent.isnil
@@ -54,7 +55,7 @@ suite "Agent":
     check agent.state == 0.0
 
   test "Creating neighbors":
-      agent = Agent(id: 0, neighbors: initTable[string, seq[ptr Agent]]())
+      agent = Agent(id: 0, neighbors: @[])
       let n = 10
       var agents = newSeq[Agent](n)
       for id in 1..n:
@@ -62,23 +63,18 @@ suite "Agent":
         agents[id - 1] = other
         agent.addEdge(agents[id-1])
 
-      agent.neighbors["test"].shuffle
-      for role, neighbors in agent.neighbors:
-        for neighbor in neighbors:
-          check neighbor.isnil == false
-          check neighbor.role == "test"
+      check agent.neighbors.len == n
+  test "Deleting neighbors":
+      var agents = newSeq[Agent](2)
+      for id in 0..1:
+        agents[id] = Agent(id: id, neighbors: @[])
+      agents[0].addEdge(agents[1])
+      check agents[0].neighbors.len == agents[1].neighbors.len
+      check agents[0].neighbors.len == 1
 
-      check agent.neighbors["test"].sample().isnil == false
-      check agent.neighbors["test"].sample().id in agent.neighbors["test"].mapIt(it.id)
-
-      let numberOfNeighbors = agent.neighbors["test"].len
-
-      let prop = agent.neighbors["test"][0]
-      agent.rmEdge(prop[])
-      assert agent.neighbors["test"].len == numberOfNeighbors - 1
-      agent.addEdge(prop[])
-      assert agent.neighbors["test"].len == numberOfNeighbors
-
+      agents[0].rmEdge(agents[1])
+      check agents[0].neighbors.len == 0
+      check agents[1].neighbors.len == 0
 
   test "Agent property":
     agent = Agent(n_samples: 3, state: -5.0)

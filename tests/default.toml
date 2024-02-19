@@ -10,6 +10,7 @@ beta = 1.0
 ratio = 1.0
 seed = 1234
 n_samples = 1
+N = -1
 
 ["test override"]
 roles = ["B"]

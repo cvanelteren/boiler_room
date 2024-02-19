@@ -1,5 +1,6 @@
 import sequtils, random, math, strutils,
             strformat, strutils, tables, sequtils, terminal, options
+import sets
 import utils
 import nimpy
 let np = pyImport("numpy")
@@ -8,7 +9,7 @@ type Agent* = ref object
   id*: int
   state*: float
   role*: string
-  neighbors*: seq[int]
+  neighbors*: Table[int, int]
   bias*: float
   n_samples*: int
   edgeRate*: float
@@ -17,7 +18,7 @@ type Agent* = ref object
 type Mutation* = object
     id*: int
     state*: float
-    neighbors*: seq[int]
+    neighbors*: Table[int, int]
     role*: string
 
 proc hasNeighbor(this: Agent, other: int): bool =
@@ -31,7 +32,7 @@ type State* = object of Config
 
 proc makeAgent*(id: int, state: State): Agent =
   result = Agent(id: id,
-                 neighbors: @[],
+                 neighbors: initTable[int, int](),
                  role: state.roles.sample,
                  state: state.states.sample,
                  bias: 0.0,
@@ -43,24 +44,16 @@ proc makeAgent*(id: int, state: State): Agent =
 proc addEdge*(this: var Agent, other: var Agent, directed = false) =
   if this == other:
     return
-  if other.id notin this.neighbors:
-    this.neighbors.add other.id
-
-  if not directed:
-    if this.id notin other.neighbors:
-      other.neighbors.add this.id
-
+  this.neighbors[other.id] = 1
+  other.neighbors[this.id] = 1
 
 
 proc rmEdge*(this, other: var Agent, directed = false) =
   # remove edge
-  var idx = this.neighbors.find(other.id)
-  if idx != -1:
-    this.neighbors.del idx
-
-  idx = other.neighbors.find(this.id)
-  if idx != -1:
-    other.neighbors.del idx
+  if other.id in this.neighbors:
+    this.neighbors.del(other.id)
+  if this.id in other.neighbors:
+    this.neighbors.del this.id
 
 
 proc makeNetwork*(state: var State, g: PyObject) =
@@ -137,8 +130,6 @@ proc makeState*(config: Config): State =
   # add agents and connections
   result.makeNetwork(config.g)
 
-
-
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
   result = state.benefit * interactions.prod - state.cost * interactions[0]
 
@@ -155,16 +146,17 @@ proc sample(agent: Agent,
   interactions[0] = agent.state
   # Create distribution of surrounding agent roles and states
   var seen = @[agent.role]
-  var neighbors = agent.neighbors
   var attempt = 1
-  neighbors.shuffle()
-  for other in neighbors:
-    if attempt >= order:
-      break
+  if agent.neighbors.len == 0:
+    return 0.0
+  var neighbors = agent.neighbors.keys.toseq()
+  # neighbors.shuffle()
+  for attempt in 1..<order:
+    let other = state.rng.sample(neighbors)
     if state.agents[other].role notin seen:
       seen.add state.agents[other].role
       interactions[attempt] = state.agents[other].state
-      attempt.inc
+      # attempt.inc
   result = agent.energy(interactions, state)
 
 
@@ -202,22 +194,22 @@ proc sampleNeighbor(state: var State, agent: int): int =
     return other
 
   # sample a random neighbor of neighbors
-  result = state.rng.sample(agent.neighbors)
-  result = state.rng.sample(state.agents[result].neighbors)
+  result = state.rng.sample(agent.neighbors.keys().toseq())
+  result = state.rng.sample(state.agents[result].neighbors.keys().toseq())
 
 proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   # determine which to perform
-  let current = state.agents[agent].makeMutation()
+  var currents = @[state.agents[agent].makeMutation()]
   var buffer = [0.0, 0.0]
   buffer[0] = state.getPayout(agent, order = state.roles.len)
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
+    currents.add state.agents[other].makeMutation()
     # consider opposite of current state
     if state.agents[agent].hasNeighbor(other):
       state.agents[agent].rmEdge(state.agents[other])
     else:
       state.agents[agent].addEdge(state.agents[other])
-
     buffer[1] = state.getPayout(agent, order = state.roles.len)
   else:
     # TODO: make more general
@@ -231,12 +223,14 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   # echo (state.cost, state.beta, delta, fermiUpdate(delta, state.beta))
   # accept with fermi-rule
   if state.rng.rand(1.0) <= fermiUpdate(delta, state.beta):
-    mutations.add state.agents[agent].makeMutation()
+    for current in currents:
+      mutations.add state.agents[current.id].makeMutation()
   # reject new state
   else:
-    state.agents[agent].state = current.state
-    state.agents[agent].neighbors = current.neighbors
-    state.agents[agent].role = current.role
+    for current in currents:
+      state.agents[current.id].state = current.state
+      state.agents[current.id].neighbors = current.neighbors
+      state.agents[current.id].role = current.role
 
 
 proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
@@ -263,7 +257,7 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
     # state.step(state.rng.sample(agents), mutations)
     for agent in agents:
       #NOTE: will add to mutations if new state is accepted
-      state.step(agent, mutations)
+      step(state, agent, mutations)
 
 
 proc `echo`*(config: Config) =
