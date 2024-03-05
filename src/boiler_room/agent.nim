@@ -53,7 +53,7 @@ proc rmEdge*(this, other: var Agent, directed = false) =
   if other.id in this.neighbors:
     this.neighbors.del(other.id)
   if this.id in other.neighbors:
-    this.neighbors.del this.id
+    other.neighbors.del this.id
 
 
 proc makeNetwork*(state: var State, g: PyObject) =
@@ -131,7 +131,7 @@ proc makeState*(config: Config): State =
   result.makeNetwork(config.g)
 
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
-  result = state.benefit * interactions.prod - state.cost * interactions[0]
+  result = state.benefit * interactions.prod - state.cost * interactions[0] # * agent.neighbors.len.float
 
 
 proc fermiUpdate*(delta, beta: float): float =
@@ -202,8 +202,11 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   var currents = @[state.agents[agent].makeMutation()]
   var buffer = [0.0, 0.0]
   buffer[0] = state.getPayout(agent, order = state.roles.len)
+  let benefit = state.benefit
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
+
+    state.benefit = state.benefit * state.agents[other].neighbors.len.float
     currents.add state.agents[other].makeMutation()
     # consider opposite of current state
     if state.agents[agent].hasNeighbor(other):
@@ -223,14 +226,17 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   # echo (state.cost, state.beta, delta, fermiUpdate(delta, state.beta))
   # accept with fermi-rule
   if state.rng.rand(1.0) <= fermiUpdate(delta, state.beta):
-    for current in currents:
+    for idx, current in currents:
       mutations.add state.agents[current.id].makeMutation()
+        # let msg = &"{tmp[idx]}, {state.agents[current.id].neighbors.len} {delete}"
+        # assert state.agents[current.id].neighbors.len != (tmp[idx] - 1), msg
   # reject new state
   else:
     for current in currents:
       state.agents[current.id].state = current.state
       state.agents[current.id].neighbors = current.neighbors
       state.agents[current.id].role = current.role
+  state.benefit = benefit
 
 
 proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
@@ -246,7 +252,7 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
 
   var mutations = state.agents.mapIt(it.makeMutation)
   var snap = 0
-  for ti in 1..t:
+  for ti in 1..<t:
     if ti.mod(snapshots[snap]) == 0:
       result[snap] = mutations
       snap.inc
