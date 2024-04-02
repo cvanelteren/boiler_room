@@ -131,7 +131,7 @@ proc makeState*(config: Config): State =
   result.makeNetwork(config.g)
 
 proc energy(agent: Agent, interactions: seq[float], state: State): float =
-  result = state.benefit * interactions.prod - state.cost * interactions[0] # * agent.neighbors.len.float
+  result = state.benefit * interactions.prod - state.cost * interactions[0]
 
 
 proc fermiUpdate*(delta, beta: float): float =
@@ -201,21 +201,25 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   # determine which to perform
   var currents = @[state.agents[agent].makeMutation()]
   var buffer = [0.0, 0.0]
-  buffer[0] = state.getPayout(agent, order = state.roles.len)
+
   let benefit = state.benefit
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
-
-    state.benefit = state.benefit * state.agents[other].neighbors.len.float
+    let prior_cost = state.cost
+    state.cost = state.cost * state.agents[agent].neighbors.len.float
+    buffer[0] = state.getPayout(agent, order = state.roles.len)
     currents.add state.agents[other].makeMutation()
     # consider opposite of current state
     if state.agents[agent].hasNeighbor(other):
       state.agents[agent].rmEdge(state.agents[other])
     else:
       state.agents[agent].addEdge(state.agents[other])
+    state.cost = state.cost * state.agents[agent].neighbors.len.float
     buffer[1] = state.getPayout(agent, order = state.roles.len)
+    state.cost = prior_cost
   else:
     # TODO: make more general
+    buffer[0] = state.getPayout(agent, order = state.roles.len)
     var newState = 1.0
     if state.agents[agent].state == newState:
       newState = 0.0
