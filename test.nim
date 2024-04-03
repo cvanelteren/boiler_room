@@ -1,9 +1,8 @@
-import tables, strutils, strformat
-{.experimental:"codeReordering".}
+import tables, strutils, strformat, weave
 
-var a = initTable[int, int]()
+var a = "test".open()
+echo type(a)
+a.close()
+proc task(x: int): int =
+  return x
 
-a[0] = 3
-a[2] =  4
-a[-1] = 0
-for k, v in a: echo &"{k=} {v=}"

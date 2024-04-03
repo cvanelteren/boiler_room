@@ -170,13 +170,14 @@ proc getPayout(state: var State, id: int, order = 3): float =
 proc makeMutation(agent: Agent): Mutation =
   result = Mutation(
       id: agent.id,
-      neighbors: agent.neighbors,
+      neighbors: deepcopy(agent.neighbors),
       state: agent.state,
       role: agent.role
     )
 
 proc generateSnapshots(t, n: int): seq[int] =
-  if n == -1:
+  return (0..<t).toseq()
+  if n == 0:
     return (0..<t).toseq()
   let first = (0.5 * n.float).int
   let second = (0.50 * n.float).int
@@ -202,21 +203,24 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   var currents = @[state.agents[agent].makeMutation()]
   var buffer = [0.0, 0.0]
 
-  let benefit = state.benefit
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
-    let prior_cost = state.cost
-    state.cost = state.cost * state.agents[agent].neighbors.len.float
+
+    let prior = state.cost
+    state.cost = prior * state.agents[agent].neighbors.len.float
     buffer[0] = state.getPayout(agent, order = state.roles.len)
+
     currents.add state.agents[other].makeMutation()
     # consider opposite of current state
     if state.agents[agent].hasNeighbor(other):
       state.agents[agent].rmEdge(state.agents[other])
     else:
       state.agents[agent].addEdge(state.agents[other])
-    state.cost = state.cost * state.agents[agent].neighbors.len.float
+
+    state.cost = prior * state.agents[agent].neighbors.len.float
     buffer[1] = state.getPayout(agent, order = state.roles.len)
-    state.cost = prior_cost
+    state.cost = prior
+
   else:
     # TODO: make more general
     buffer[0] = state.getPayout(agent, order = state.roles.len)
@@ -229,7 +233,8 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   let delta = (buffer[1] - buffer[0])
   # echo (state.cost, state.beta, delta, fermiUpdate(delta, state.beta))
   # accept with fermi-rule
-  if state.rng.rand(1.0) <= fermiUpdate(delta, state.beta):
+  # echo fermiUpdate(delta, state.beta), (state.beta, state.cost)
+  if state.rng.rand(1.0) < fermiUpdate(delta, state.beta):
     for idx, current in currents:
       mutations.add state.agents[current.id].makeMutation()
         # let msg = &"{tmp[idx]}, {state.agents[current.id].neighbors.len} {delete}"
@@ -240,7 +245,6 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
       state.agents[current.id].state = current.state
       state.agents[current.id].neighbors = current.neighbors
       state.agents[current.id].role = current.role
-  state.benefit = benefit
 
 
 proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
@@ -249,6 +253,7 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
 
   var snapshots = generateSnapshots(t, n)
   result = newSeq[newSeq[Mutation]()](snapshots.len)
+  # result = newSeq[newSeq[Mutation]()](t)
   # NOTE: mutations are now stored dense in its adjacency structure
   # since we are having additions and removals, we need to keep track
   # of both which could be remapped to positive or negative indices
@@ -257,6 +262,7 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
   var mutations = state.agents.mapIt(it.makeMutation)
   var snap = 0
   for ti in 1..<t:
+    # result[ti] = mutations
     if ti.mod(snapshots[snap]) == 0:
       result[snap] = mutations
       snap.inc
