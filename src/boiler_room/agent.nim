@@ -135,7 +135,7 @@ proc energy(agent: Agent, interactions: seq[float], state: State): float =
 
 
 proc fermiUpdate*(delta, beta: float): float =
-  result = 1.0 / (1.0 + exp(-1/beta * delta))
+  result = 1.0 / (1.0 + exp(-(1/beta) * delta))
 
 proc sample(agent: Agent,
             state: var State,
@@ -151,8 +151,12 @@ proc sample(agent: Agent,
     return 0.0
   var neighbors = agent.neighbors.keys.toseq()
   # neighbors.shuffle()
+  var other: int
   for attempt in 1..<order:
-    let other = state.rng.sample(neighbors)
+    for idx in 0..100:
+      other = state.rng.sample(neighbors)
+      if state.agents[other].role notin seen:
+        break
     if state.agents[other].role notin seen:
       seen.add state.agents[other].role
       interactions[attempt] = state.agents[other].state
@@ -170,14 +174,14 @@ proc getPayout(state: var State, id: int, order = 3): float =
 proc makeMutation(agent: Agent): Mutation =
   result = Mutation(
       id: agent.id,
-      neighbors: deepcopy(agent.neighbors),
+      neighbors: agent.neighbors,
       state: agent.state,
       role: agent.role
     )
 
 proc generateSnapshots(t, n: int): seq[int] =
   return (0..<t).toseq()
-  if n == 0:
+  if n <= 0:
     return (0..<t).toseq()
   let first = (0.5 * n.float).int
   let second = (0.50 * n.float).int
@@ -190,7 +194,7 @@ proc sampleNeighbor(state: var State, agent: int): int =
   let agent = state.agents[agent]
   if agent.neighbors.len == 0 or state.rng.rand(1.0) < agent.mutationRate:
     var other = state.rng.sample(state.agents).id
-    while other == agent.id:
+    while other == agent.id and state.agents[other].role != agent.role:
       other = state.rng.sample(state.agents).id
     return other
 
@@ -206,9 +210,13 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
 
+
+    # let bprior = state.benefit
     let prior = state.cost
     state.cost = prior * state.agents[agent].neighbors.len.float
+    # state.benefit = bprior * state.agents[agent].neighbors.len.float
     buffer[0] = state.getPayout(agent, order = state.roles.len)
+    # buffer[0] += state.getPayout(other, order = state.roles.len)
 
     currents.add state.agents[other].makeMutation()
     # consider opposite of current state
@@ -218,17 +226,22 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
       state.agents[agent].addEdge(state.agents[other])
 
     state.cost = prior * state.agents[agent].neighbors.len.float
+    # state.benefit = bprior * state.agents[agent].neighbors.len.float
+    # let zz = (1/state.agents[agent].n_samples.float) *
     buffer[1] = state.getPayout(agent, order = state.roles.len)
+    # buffer[1] += state.getPayout(other, order = state.roles.len)
     state.cost = prior
+    # state.benefit = bprior
 
   else:
     # TODO: make more general
-    buffer[0] = state.getPayout(agent, order = state.roles.len)
+    let z = 1/(state.agents[agent].n_samples.float)
+    buffer[0] = z * state.getPayout(agent, order = state.roles.len)
     var newState = 1.0
     if state.agents[agent].state == newState:
       newState = 0.0
     state.agents[agent].state = newState
-    buffer[1] = state.getPayout(agent, order = state.roles.len)
+    buffer[1] = z * state.getPayout(agent, order = state.roles.len)
 
   let delta = (buffer[1] - buffer[0])
   # echo (state.cost, state.beta, delta, fermiUpdate(delta, state.beta))
@@ -247,7 +260,7 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
       state.agents[current.id].role = current.role
 
 
-proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
+proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
   # keep diffs for copy
   var agents = (0..<state.agents.len).toseq
 
@@ -261,11 +274,11 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
 
   var mutations = state.agents.mapIt(it.makeMutation)
   var snap = 0
-  for ti in 1..<t:
-    # result[ti] = mutations
-    if ti.mod(snapshots[snap]) == 0:
+  for ti in 0..<t:
+    if ti == snapshots[snap]:
       result[snap] = mutations
       snap.inc
+
 
     mutations = @[]
     agents.shuffle()
@@ -274,6 +287,13 @@ proc simulate*(state: var State, t: int, n: int = -1): seq[seq[Mutation]] =
     for agent in agents:
       #NOTE: will add to mutations if new state is accepted
       step(state, agent, mutations)
+
+  # var s = 0.0
+  # for agent in state.agents:
+  #   s += agent.state / state.agents.len.float
+  # echo " "
+  # echo (s, state.beta, state.cost)
+
 
 
 proc `echo`*(config: Config) =
