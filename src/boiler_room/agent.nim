@@ -153,10 +153,7 @@ proc sample(agent: Agent,
   # neighbors.shuffle()
   var other: int
   for attempt in 1..<order:
-    for idx in 0..100:
-      other = state.rng.sample(neighbors)
-      if state.agents[other].role notin seen:
-        break
+    other = state.rng.sample(neighbors)
     if state.agents[other].role notin seen:
       seen.add state.agents[other].role
       interactions[attempt] = state.agents[other].state
