@@ -153,10 +153,20 @@ proc sample(agent: Agent,
   # neighbors.shuffle()
   var other: int
   for attempt in 1..<order:
+
+    # var idx = 0
+    # while idx < 100:
+    #   other = state.rng.sample(neighbors)
+    #   if state.agents[other].role notin seen:
+    #     seen.add state.agents[other].role
+    #     interactions[attempt] = state.agents[other].state
+    #     break
+    #   idx.inc
+
     other = state.rng.sample(neighbors)
     if state.agents[other].role notin seen:
-      seen.add state.agents[other].role
       interactions[attempt] = state.agents[other].state
+
       # attempt.inc
   result = agent.energy(interactions, state)
 
@@ -196,24 +206,37 @@ proc sampleNeighbor(state: var State, agent: int): int =
     return other
 
   # sample a random neighbor of neighbors
-  result = state.rng.sample(agent.neighbors.keys().toseq())
-  result = state.rng.sample(state.agents[result].neighbors.keys().toseq())
+  if agent.neighbors.len > 0:
+    result = state.rng.sample(agent.neighbors.keys().toseq())
+    if state.agents[result].neighbors.len > 0:
+      return state.rng.sample(state.agents[result].neighbors.keys().toseq())
+  # default option
+  return agent.id
 
 proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
   # determine which to perform
   var currents = @[state.agents[agent].makeMutation()]
   var buffer = [0.0, 0.0]
 
+  let Z = 1.0/(state.agents.len - 1).float
+  let prior = state.cost
+  let pp = state.benefit
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
 
 
     # let bprior = state.benefit
-    let prior = state.cost
-    state.cost = prior * state.agents[agent].neighbors.len.float
-    # state.benefit = bprior * state.agents[agent].neighbors.len.float
+    var z = 1/(state.agents[agent].neighbors.len.float)
+
+    # var tmp_cost = state.agents[agent].neighbors.len.float
+
+    var tmp_cost = 0.0
+    for neighbor in state.agents[agent].neighbors.keys():
+      if state.agents[neighbor].state == 1.0:
+        tmp_cost += 1.0
+
+    state.cost = Z * tmp_cost * prior
     buffer[0] = state.getPayout(agent, order = state.roles.len)
-    # buffer[0] += state.getPayout(other, order = state.roles.len)
 
     currents.add state.agents[other].makeMutation()
     # consider opposite of current state
@@ -222,26 +245,41 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
     else:
       state.agents[agent].addEdge(state.agents[other])
 
-    state.cost = prior * state.agents[agent].neighbors.len.float
-    # state.benefit = bprior * state.agents[agent].neighbors.len.float
-    # let zz = (1/state.agents[agent].n_samples.float) *
+    # tmp_cost = state.agents[agent].neighbors.len.float
+
+    tmp_cost = 0.0
+    for neighbor in state.agents[agent].neighbors.keys():
+      if state.agents[neighbor].state == 1.0:
+        tmp_cost += 1.0
+
+    # z = 1/(state.agents[agent].neighbors.len.float)
+    state.cost = Z * tmp_cost * prior
+
     buffer[1] = state.getPayout(agent, order = state.roles.len)
-    # buffer[1] += state.getPayout(other, order = state.roles.len)
-    state.cost = prior
-    # state.benefit = bprior
 
   else:
     # TODO: make more general
-    let z = 1/(state.agents[agent].n_samples.float)
-    buffer[0] = z * state.getPayout(agent, order = state.roles.len)
+
+    # get number of criminal neighbors
+    # var tmp_cost = state.agents[agent].neighbors.len.float
+
+    var tmp_cost = 0.0
+    for neighbor in state.agents[agent].neighbors.keys():
+      if state.agents[neighbor].state == 1.0:
+        tmp_cost += 1.0
+    # let z = 1/(state.agents[agent].neighbors.len.float)
+
+    state.cost = Z * tmp_cost * prior
+    buffer[0] = state.getPayout(agent, order = state.roles.len)
+    # change strategy
     var newState = 1.0
     if state.agents[agent].state == newState:
       newState = 0.0
     state.agents[agent].state = newState
-    buffer[1] = z * state.getPayout(agent, order = state.roles.len)
+    buffer[1] = state.getPayout(agent, order = state.roles.len)
 
-  let delta = (buffer[1] - buffer[0])
-  # echo (state.cost, state.beta, delta, fermiUpdate(delta, state.beta))
+  let delta =  (1/(state.agents[agent].n_samples.float)) * (buffer[1] - buffer[0])
+  # echo &"{state.cost=} {fermiUpdate(delta,state.beta)=}"
   # accept with fermi-rule
   # echo fermiUpdate(delta, state.beta), (state.beta, state.cost)
   if state.rng.rand(1.0) < fermiUpdate(delta, state.beta):
@@ -255,6 +293,9 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
       state.agents[current.id].state = current.state
       state.agents[current.id].neighbors = current.neighbors
       state.agents[current.id].role = current.role
+  # echo &"{state.cost=} {prior=}"
+  state.cost = prior
+  state.benefit = pp
 
 
 proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
@@ -275,8 +316,6 @@ proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
     if ti == snapshots[snap]:
       result[snap] = mutations
       snap.inc
-
-
     mutations = @[]
     agents.shuffle()
     # let agent = state.rng.sample(agents)
@@ -285,12 +324,77 @@ proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
       #NOTE: will add to mutations if new state is accepted
       step(state, agent, mutations)
 
-  # var s = 0.0
-  # for agent in state.agents:
-  #   s += agent.state / state.agents.len.float
-  # echo " "
-  # echo (s, state.beta, state.cost)
+proc makeBuffer(n: int,
+                state: var State,
+                agents: var seq[int],
+                mutations: var seq[Mutation]): seq[float] =
 
+  result = newSeqWith[float](n, 1.0)
+  let z = 1/n.float
+  # fill the buffer
+  for idx in 0..<result.len:
+    result[idx] = state.agents.foldl(a + b.neighbors.len,
+                                     state.agents[0].neighbors.len).float * z
+    # perform a step
+    agents.shuffle()
+    mutations = @[] # empty mutations to prevent blow up
+    for agent in agents:
+      step(state, agent, mutations)
+
+proc findEquilibrium(state: var State,
+                     agents: var seq[int],
+                     mutations: var seq[Mutation],
+                     threshold: float) =
+
+  var buffer = makeBuffer(100, state, agents, mutations)
+  let nbuf = buffer.len
+  let z = 1/nbuf.float
+  var zz = state.agents.len.float
+  zz = 1/ (zz * (zz - 1) / 2.0)
+  var idx = 0
+  # equilibrate
+  proc mse(buffer: seq[float]): float =
+    for idx, other in buffer[1..^1]:
+      result += (other - buffer[idx])^2
+    result *= 1/(buffer.len.float)
+
+  idx = 0
+  while mse(buffer) > threshold:
+    buffer[idx] = state.agents.foldl(a + b.neighbors.len,
+                  state.agents[0].neighbors.len).float * zz
+    idx = (idx + 1).mod(nbuf)
+    # perform a step
+    agents.shuffle()
+    mutations = @[] # empty mutations to prevent blow up
+    for agent in agents:
+      step(state, agent, mutations)
+
+
+proc simulateInEquilibrium*(state: var State, n = 0, threshold = 1e-2, mutationAfter = 1.0): seq[seq[Mutation]] =
+  assert n >= 1
+  var agents = (0..<state.agents.len).toseq()
+  # NOTE: the first index is the startin state and should contain all the agents
+  result = newSeq[newSeq[Mutation]()](n)
+  var mutations = state.agents.mapIt(it.makeMutation)
+  result[0] = mutations
+
+  # we equilibrate in the edge change
+  var z = state.agents.len.float
+  z  = z * (z - 1) / 2
+
+
+  state.findEquilibrium(agents, mutations, threshold)
+  for agent in state.agents:
+    agent.mutationRate = mutationAfter
+
+  # sample from the equilibrium
+  for sample in 1..<n:
+    result[sample] = mutations
+    # perform a step
+    agents.shuffle()
+    mutations = @[] # empty mutations to prevent blow up
+    for agent in agents:
+      step(state, agent, mutations)
 
 
 proc `echo`*(config: Config) =
