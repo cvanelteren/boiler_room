@@ -278,7 +278,7 @@ proc step(state: var State, agent: int, mutations: var seq[Mutation]) =
     state.agents[agent].state = newState
     buffer[1] = state.getPayout(agent, order = state.roles.len)
 
-  let delta =  (1/(state.agents[agent].n_samples.float)) * (buffer[1] - buffer[0])
+  let delta = (buffer[1] - buffer[0])
   # echo &"{state.cost=} {fermiUpdate(delta,state.beta)=}"
   # accept with fermi-rule
   # echo fermiUpdate(delta, state.beta), (state.beta, state.cost)
