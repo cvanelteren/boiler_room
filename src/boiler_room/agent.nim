@@ -30,6 +30,14 @@ type State* = object of Config
   p*: Table[string, Table[float, float]]
 
 
+proc toAdj*(state: State): seq[(int, int)] =
+  var unique = initHashSet[(int, int)]()
+  for agent in state.agents:
+    for neighbor in agent.neighbors.keys():
+      unique.incl (agent.id, neighbor)
+  result = unique.toseq()
+
+
 proc makeAgent*(id: int, state: State): Agent =
   result = Agent(id: id,
                  neighbors: initTable[int, int](),
