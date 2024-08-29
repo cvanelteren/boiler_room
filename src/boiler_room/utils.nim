@@ -1,52 +1,57 @@
-import sequtils, parsetoml
-import nimpy
+import sequtils, parsetoml, strutils, strformat
+from agent import Config, Mutation, DataPoint, State
 
-type Config* = object of RootObj
-  states*: seq[float]
-  roles*: seq[string]
+proc to*(mutations: seq[seq[Mutation]], T: typedesc): DataPoint =
+  result.states = newSeqWith(mutations.len, newSeq[float]())
+  result.adj = newSeqWith(mutations.len, initTable[int, seq[int]]())
+  for agent in mutations[0]:
+    result.states[0].add agent.state
+    result.adj[0][agent.id] = agent.neighbors.keys().toseq()
 
-  alpha*, beta*, benefit*, cost*: float
-  mu*: float # deprecated
+  # start from 1 but the index here starts at 0
+  for kdx, mutation in mutations[1..^1]:
+    result.states[kdx + 1] = result.states[kdx]
+    result.adj[kdx + 1] = result.adj[kdx]
+    for agent in mutation:
+      result.states[kdx + 1][agent.id] = agent.state
+      result.adj[kdx + 1][agent.id] = deepcopy(agent.neighbors.keys().toseq())
+      # preparse simulation run for n trials per parameter setting:
 
-  rewire*: float
-  assortativity*: float
-  depth*:int
-  g*: PyObject
+proc create_data_name(base: string,
+                      config: Config,
+                      ext = ".json",
+                      additional = ""): string =
+  result = [&"{config.p_states=}",
+            &"{config.trial=}",
+              &"{config.beta=}",
+              &"{config.cost=}",
+            &"{config.z=}"].join("_")
+  result.add additional
+  result = result.replace("config.", "")
+  result = [base, "/", result, ext].join()
+proc create_graph_filename(base: string,
 
-  n_samples*, t*, seed*, z*: int
-  trial*, n_trials*: int
-  step*: int
-
-  p_states*: seq[seq[float]]
-  p_roles* : seq[float]
-
-proc read*(fp: string, target: string = "general"): Config =
+                            config: Config,
+                            ext = ".graph",
+                            additional = ""): string =
+  result = create_data_name(
+    base,
+    config,
+    ext = ".graph",
+    additional = additional
+  )
+proc readParams*(fp: string, target: string = "general"): Config =
   # TODO: very uggly replace this with more readable code
   let tmp = parsetoml.parseFile(fp).getTable
   result = Config()
 
-  # read states
-  result.states = tmp["general"]["states"].getElems.mapIt(it.getFloat)
-  if "states" in tmp[target]:
-    result.states = tmp[target]["states"].getElems.mapIt(it.getFloat)
-
-  # read roles
-  result.roles = tmp["general"]["roles"].getElems.mapIt(it.getStr)
-  if "roles" in tmp[target]:
-    result.roles = tmp[target]["roles"].getElems.mapIt(it.getStr)
-
   # read p_state
-  result.p_states = tmp["general"]["p_states"].getElems.mapIt(it.getElems.mapIt(it.getFloat))
+  var s = tmp["general"]["p_states"].getElems.mapIt(it.getFloat)
   if "p_states" in tmp[target]:
-    result.p_states = tmp[target]["p_states"].getElems.mapIt(it.getElems.mapIt(it.getFloat))
-
-  assert result.p_states.len == result.roles.len
-
-  # read p_roles
-  result.p_roles = tmp["general"]["p_roles"].getElems.mapIt(it.getFloat)
-  if "p_roles" in tmp[target]:
-    result.p_roles = tmp[target]["p_roles"].getElems.mapIt(it.getFloat)
-
+    s = tmp[target]["p_states"].getElems.mapIt(it.getFloat)
+  result.p_states = initTable[float, float]()
+  for idx, si in s:
+    result.p_states[idx.float] = si
 
   # load constants
   result.z = tmp["general"]["z"].getInt
@@ -89,7 +94,7 @@ proc read*(fp: string, target: string = "general"): Config =
   if "n_samples" in tmp[target]:
     result.n_samples = tmp[target]["n_samples"].getInt()
 
-  result.step = tmp["general"]["N"].getInt()
+  result.step = 1
   if "N" in tmp[target]:
     result.step = tmp[target]["N"].getInt()
 
