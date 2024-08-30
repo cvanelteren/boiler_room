@@ -97,7 +97,3 @@ proc readParams*(fp: string, target: string = "general"): Config =
   result.step = 1
   if "N" in tmp[target]:
     result.step = tmp[target]["N"].getInt()
-
-  result.mu = 0.0
-  if "mu" in tmp[target]:
-    result.mu = tmp[target]["mu"].getFloat()
