@@ -9,37 +9,32 @@ proc to*(mutations: seq[seq[Mutation]], T: typedesc): DataPoint =
     result.adj[0][agent.id] = agent.neighbors.keys().toseq()
 
   # start from 1 but the index here starts at 0
-  for kdx, mutation in mutations[1..^1]:
+  for kdx, mutation in mutations[1 ..^ 1]:
     result.states[kdx + 1] = result.states[kdx]
     result.adj[kdx + 1] = result.adj[kdx]
     for agent in mutation:
       result.states[kdx + 1][agent.id] = agent.state
-      result.adj[kdx + 1][agent.id] = deepcopy(agent.neighbors.keys().toseq())
-      # preparse simulation run for n trials per parameter setting:
+      result.adj[kdx + 1][agent.id] = agent.neighbors.keys().toseq()
 
-proc create_data_name(base: string,
-                      config: Config,
-                      ext = ".json",
-                      additional = ""): string =
-  result = [&"{config.p_states=}",
-            &"{config.trial=}",
-              &"{config.beta=}",
-              &"{config.cost=}",
-            &"{config.z=}"].join("_")
+proc create_data_name(
+    base: string, config: Config, ext = ".json", additional = ""
+): string =
+  result = [
+    &"{config.p_states=}",
+    &"{config.trial=}",
+    &"{config.beta=}",
+    &"{config.cost=}",
+    &"{config.z=}",
+  ].join("_")
   result.add additional
   result = result.replace("config.", "")
   result = [base, "/", result, ext].join()
-proc create_graph_filename(base: string,
 
-                            config: Config,
-                            ext = ".graph",
-                            additional = ""): string =
-  result = create_data_name(
-    base,
-    config,
-    ext = ".graph",
-    additional = additional
-  )
+proc create_graph_filename(
+    base: string, config: Config, ext = ".graph", additional = ""
+): string =
+  result = create_data_name(base, config, ext = ".graph", additional = additional)
+
 proc readParams*(fp: string, target: string = "general"): Config =
   # TODO: very uggly replace this with more readable code
   let tmp = parsetoml.parseFile(fp).getTable
