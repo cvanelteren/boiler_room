@@ -101,32 +101,31 @@ suite "Agent Module Tests":
 
   test "getPayout calculation":
     var state = State(config: mockConfig)
-    let a = {"B": 1.0}.toTable
-    let b = {"A": 1.0}.toTable
+    let a = {"A": 1.0}.toTable
+    let b = {"B": 1.0}.toTable
     state.valueNetwork = {"A": b, "B": a}.toTable
 
     discard makeAgent(0, state)
     discard makeAgent(1, state)
     state.agents[0].state = 1.0
     state.agents[1].state = 1.0
+    state.agents[0].role = "A"
+    state.agents[1].role = "B"
     state.agents[0].addEdge(state.agents[1])
 
     var payout = state.getPayOff(0)
     let nSamples = state.agents[0].nSamples.float
     let prior_cost = state.config.cost
-    state.config.cost = calculateCost(state, 0)
-    echo state.config.cost
+    state.config.cost = calculateCost(state, 0, prior_cost)
     check:
-      payout >=
-        nSamples * state.config.benefit -
-        state.agents[0].state * state.config.cost * nSamples
+      payout == nSamples * (state.config.benefit - state.config.cost)
 
     # non-criminal interacting with other non-criminals
     #get nothing
     state.agents[0].state = 0.0
 
     state.config.cost = prior_cost
-    state.config.cost = calculateCost(state, 0)
+    state.config.cost = calculateCost(state, 0, prior_cost)
     payout = state.getPayOff(0)
     check payout == 0.0
     # criminal interacting with non-criminals should incur no cost if their only connection is non-criminal
@@ -134,11 +133,20 @@ suite "Agent Module Tests":
     state.agents[1].state = 0.0
 
     state.config.cost = prior_cost
-    state.config.cost = calculateCost(state, 0)
+    state.config.cost = calculateCost(state, 0, prior_cost)
+    check state.config.cost == 0.0
     payout = state.getPayOff(0)
     # should be zero as the only connection is non-criminal
     # so the criminal degree is non-criminal
-    check payout == 0.0 # -nSamples * state.config.cost
+    check payout == nSamples * state.config.cost
+
+    discard makeAgent(2, state)
+    state.agents[0].addEdge(state.agents[2])
+    state.agents[2].state = 1.0
+    state.agents[2].role = "B"
+    state.config.cost = calculateCost(state, 0, prior_cost)
+    check state.config.cost > 0.0
+    payout = state.getPayOff(0)
 
   test "step function":
     var state = State(config: mockConfig)
@@ -186,6 +194,6 @@ suite "Agent Module Tests":
     a1.addEdge(a2)
 
     let availableRoles = a1.getAvailableRoles()
-    let nums = a1.getNumOrganizations(availableRoles)
+    let nums = state.getPayoff(a1.id)
     # should be succesfull every time
-    check nums == a1.nSamples.float
+    check nums == -5.0

@@ -199,12 +199,10 @@ proc setup*(base: Config, g, valueNetwork: PyObject): State =
 proc fermiUpdate*(delta, beta: float): float =
   result = 1.0 / (1.0 + exp(-(1 / beta) * delta))
 
-proc energy(agent: Agent, numberOfOrganizations: float): float =
+proc energy(agent: Agent, interactions: seq[float], state: State): float =
   result =
-    agent.state * (
-      agent.parent.config.benefit * numberOfOrganizations -
-      agent.parent.config.cost * agent.nSamples.float
-    )
+    agent.parent.config.benefit * interactions.prod -
+    agent.parent.config.cost * interactions[0]
 
 proc getAvailableRoles*(agent: Agent): Table[string, seq[int]] =
   result = initTable[string, seq[int]]()
@@ -212,38 +210,6 @@ proc getAvailableRoles*(agent: Agent): Table[string, seq[int]] =
     let role = agent.parent.agents[neighbor].role
     if result.haskeyorput(role, @[neighbor]):
       result[role].add neighbor
-
-proc getNumOrganizations*(
-    agent: Agent, availableRoles: Table[string, seq[int]]
-): float =
-  # track the criminal organizations
-  let requiredRoles = agent.parent.valueNetwork[agent.role].len - 1
-  let options = agent.parent.valueNetwork[agent.role].keys().toseq()
-  let weights = agent.parent.valueNetwork[agent.role].values().toseq().cumsummed()
-
-  result = 0.0
-  for sample in (0 ..< agent.nSamples):
-    var criminalOrganization = 1.0
-    for role in agent.parent.valueNetwork[agent.role].keys():
-      if role in availableRoles:
-        let other = agent.parent.rng.sample(availableRoles[role])
-        criminalOrganization *= agent.parent.agents[other].state
-      else:
-        return 0.0
-    result += criminalOrganization
-
-proc sample(agent: Agent, availableRoles: Table[string, seq[int]]): float {.inline.} =
-  # get the number of criminal organizations..
-  let numCriminalOrganizations = agent.getNumOrganizations(availableRoles)
-  #echo &"{numCriminalOrganizations=} {agent.parent.config.beta=}"
-  #echo &"{agent.parent.config.cost=}"
-  # and compute the energy
-  result = agent.energy(numCriminalOrganizations)
-
-proc getPayOff*(state: var State, id: int): float {.inline.} =
-  var agent = state.agents[id]
-  let availableRoles = agent.getAvailableRoles()
-  result = agent.sample(availableRoles)
 
 proc makeMutation(agent: Agent): Mutation {.inline.} =
   result = Mutation(
@@ -259,11 +225,30 @@ proc generateSnapshots*(t, n: int): seq[int] =
   let m = (t - first).div(second)
   result = (1 ..< first).toseq().concat(countUp(first, t, m).toseq())
 
+proc sample(agent: Agent, state: var State, order: int): float =
+  # fermi update
+  var interactions = newSeqWith(order, 0.0)
+  interactions[0] = agent.state
+  # Create distribution of surrounding agent roles and states
+  var seen = @[agent.role]
+  var attempt = 1
+  if agent.neighbors.len == 0:
+    return 0.0
+  var neighbors = agent.neighbors.keys.toseq()
+  # neighbors.shuffle()
+  var other: int
+  for attempt in 1 ..< order:
+    other = state.rng.sample(neighbors)
+    if state.agents[other].role notin seen:
+      interactions[attempt] = state.agents[other].state
+      # attempt.inc
+  result = agent.energy(interactions, state)
+
 proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
   let agent = state.agents[agent]
   if agent.neighbors.len == 0 or state.rng.rand(1.0) < agent.mutationRate:
     var other = state.rng.sample(state.agents).id
-    while state.agents[other].role == agent.role:
+    while state.agents[other].id == agent.id:
       other = state.rng.sample(state.agents).id
     return other
 
@@ -275,15 +260,13 @@ proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
   # default option:
   return agent.id
 
-proc calculateCost*(state: State, agent: int): float {.inline.} =
+proc calculateCost*(state: State, agent: int, prior_cost: float): float {.inline.} =
   # compute the criminal cost proportional to its degree
-  if state.agents[agent].neighbors.len == 0:
-    return 0.0
   let z = 1.0 / (state.agents.len.float - 1.0)
   for neighbor in state.agents[agent].neighbors.keys():
     if state.agents[neighbor].state == 1.0:
       result += 1.0
-  result = (z * result) * state.config.cost
+  result = (z * result) * prior_cost
 
 proc performEdgeAction(state: var State, agent, other: int) {.inline.} =
   # add or remove an edge depending on whether the edge
@@ -308,6 +291,13 @@ proc rejectMutation(state: var State, currents: seq[Mutation]) {.inline.} =
     state.agents[current.id].neighbors = current.neighbors
     state.agents[current.id].role = current.role
 
+proc getPayoff*(state: var State, id: int, order = 3): float =
+  if order < 1:
+    raise (ref ValueError)(msg: "Order cannot be smaller than 1")
+  var agent = state.agents[id]
+  for sample in 0 ..< agent.nSamples:
+    result += agent.sample(state, order)
+
 proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.} =
   var currents = @[state.agents[agent].makeMutation()] # store the current state
   var buffer = [0.0, 0.0] # change --> current, proposal
@@ -315,25 +305,29 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
   let prior_benefit = state.config.benefit
 
   # Cost is computed proportional to the criminal degree
-  state.config.cost = calculateCost(state, agent)
+  state.config.cost = calculateCost(state, agent, prior_cost)
   # compute the payoff in the current state
-  buffer[0] = state.getPayoff(agent)
+  let role = state.agents[agent].role
+  let order = state.valueNetwork[role].len + 1
+  buffer[0] = state.getPayoff(agent, order = order)
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
     currents.add(state.agents[other].makeMutation())
     # add or remove an agent
     performEdgeAction(state, agent, other)
     # adj changes so we recompute the cost
-    state.config.cost = calculateCost(state, agent)
+    state.config.cost = calculateCost(state, agent, prior_cost)
     buffer[1] = state.getPayoff(agent)
   else:
+    let prior = state.agents[agent].state
     changeStrategy(state.agents[agent])
     buffer[1] = state.getPayoff(agent)
 
   # check if we accept new state
   let delta = buffer[1] - buffer[0]
-  let z = 1 / state.agents[agent].nSamples.float
-  let p = fermiUpdate(z * delta, state.config.beta)
+  # echo &"{z * delta=} {buffer=}"
+  # sleep(100)
+  let p = fermiUpdate(delta, state.config.beta)
   if state.rng.rand(1.0) < p:
     acceptMutation(state, currents, mutations)
   else:
