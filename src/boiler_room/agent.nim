@@ -9,11 +9,12 @@ let np = pyImport("numpy")
 let nx = pyImport "networkx"
 let pd = pyImport "pandas"
 let pycopy = pyImport "copy"
+{.pragma: pyfunc, cdecl, gcsafe.}
 
 type
   # Holds the confiruation of the simulation
   Config* = ref object
-    beta*, benefit*, cost*: float
+    beta*, benefit*, cost*, edgeRate*: float
 
     depth*: int
     n_samples*, t*, seed*, z*: int
@@ -57,13 +58,17 @@ type
       benefit, cost, beta: float,
       adj: seq[Table[int, seq[int]]],
       trial: int,
+      start_criminality, start_density: float,
     ]
 
-  SimInfo = ref object
+  SimInfo {.sendable.} = ref object
     state*: State
     info*: string
     intervention*: string
-    n_intervention*: int
+    nIntervention*: int
+    base*: string
+    inEquilibrium*: bool
+    mutationAfter*: float
 
 import utils
 
@@ -107,6 +112,9 @@ proc makeAgent*(id: int, state: var State): Agent =
 proc addEdge*(this: var Agent, other: var Agent, directed = false) =
   if this.id == other.id:
     return
+  if other.id >= this.parent.agents.len:
+    return
+
   this.neighbors[other.id] = 1
   other.neighbors[this.id] = 1
 
@@ -434,7 +442,13 @@ proc simulateInEquilibrium*(
     for agent in agents:
       step(state, agent, mutations)
 
+proc `$`*(config: Config): string =
+  result = @['-'.repeat(16), " Parameters ", '-'.repeat(16)].join()
+  result.add "\n"
+  result.add &"beta:\t\t{config.beta}\n"
+  result.add &"cost:\t\t{config.cost}\n"
+  result.add &"benefit:\t\t{config.benefit}\n"
+  result.add &"edgeRate:\t\t{config.edgeRate}\n"
+
 proc `echo`*(config: Config) =
-  echo '-'.repeat(16), " Parameters ", '-'.repeat(16)
-  for key, value in config[].fieldPairs():
-    echo key, ": ", value
+  echo config
