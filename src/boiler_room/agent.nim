@@ -1,7 +1,7 @@
 import
   std/[
     sequtils, random, math, strutils, tables, sets, strformat, strutils, tables,
-    sequtils, terminal, options,
+    sequtils, terminal, options, sets,
   ]
 import os
 import nimpy
@@ -299,12 +299,66 @@ proc rejectMutation(state: var State, currents: seq[Mutation]) {.inline.} =
     state.agents[current.id].neighbors = current.neighbors
     state.agents[current.id].role = current.role
 
-proc getPayoff*(state: var State, id: int, order = 3): float =
-  if order < 1:
-    raise (ref ValueError)(msg: "Order cannot be smaller than 1")
-  var agent = state.agents[id]
-  for sample in 0 ..< agent.nSamples:
-    result += agent.sample(state, order)
+proc getPayoff(
+    state: var State,
+    id: int,
+    seenRoles: HashSet[string],
+    seenAgents: HashSet[int],
+    order = 1,
+): float =
+  # bfs implementation of getting all possible games
+  # Mind the spelling, we are currently seeingRoles and the other is roles we have seen
+  var seesRoles = initTable[string, HashSet[int]]()
+  var seenAgents = seenAgents
+  var seenRoles = seenRoles
+  seenRoles.incl state.agents[id].role # add current role, we don't need it any more
+  var allSeen = initCountTable[string]()
+  # find potential partners that one could form an organization
+  # with  while ignoring the ther agents
+  for neighbor in state.agents[id].neighbors.keys():
+    let role = state.agents[neighbor].role
+
+    # the cost is proportional to all games we could play
+    if role notin seenRoles:
+      allSeen.inc role
+    # skip in the case we have seen the agent already
+    if neighbor in seenAgents:
+      continue
+    # we have seen the roles already
+    if role in seenRoles:
+      continue
+    # they are not criminal
+    if state.agents[neighbor].state != 1.0:
+      continue
+
+    if seesRoles.hasKeyOrPut(role, @[neighbor].toHashSet()):
+      seesRoles[role].incl neighbor
+      seenAgents.incl neighbor
+
+  result = 1
+  var residual = 0.0
+  var z = 1.0
+  let center = state.agents[id].role
+  if order > 0:
+    for role in state.valueNetwork[center].keys():
+      if allSeen.hasKey(role):
+        z *= allSeen[role].float
+      if not seesRoles.hasKey(role):
+        result = 0.0
+        continue
+      result *= seesRoles[role].len.float
+      for neighbor in seesRoles[role]:
+        residual +=
+          getPayoff(
+            state,
+            neighbor,
+            seenRoles = seenRoles,
+            seenAgents = seenAgents,
+            order = order - 1,
+          )
+  result =
+    state.config.benefit * result + residual -
+    state.agents[id].state * z * state.config.cost
 
 proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.} =
   var currents = @[state.agents[agent].makeMutation()] # store the current state
@@ -317,7 +371,11 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
   # compute the payoff in the current state
   let role = state.agents[agent].role
   let order = state.valueNetwork[role].len + 1
-  buffer[0] = state.getPayoff(agent, order = order)
+
+  let seenNeighbors = HashSet[int]()
+  let seenRoles = HashSet[string]()
+  buffer[0] =
+    state.getPayoff(agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1)
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
     currents.add(state.agents[other].makeMutation())
@@ -325,11 +383,15 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
     performEdgeAction(state, agent, other)
     # adj changes so we recompute the cost
     state.config.cost = calculateCost(state, agent, prior_cost)
-    buffer[1] = state.getPayoff(agent)
+    buffer[1] = state.getPayoff(
+      agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1
+    )
   else:
     let prior = state.agents[agent].state
     changeStrategy(state.agents[agent])
-    buffer[1] = state.getPayoff(agent)
+    buffer[1] = state.getPayoff(
+      agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1
+    )
 
   # check if we accept new state
   let delta = buffer[1] - buffer[0]
