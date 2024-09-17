@@ -1,5 +1,5 @@
 import unittest
-import sequtils, random, tables, math
+import sequtils, random, tables, math, sets
 import nimpy
 import boiler_room
 #import boiler_room.agent # Assuming the code you provided is in a file named agent.nim
@@ -7,30 +7,28 @@ import boiler_room
 # Mock PyObject for testing
 type MockPyObject = ref object
 
+randomize(42) # Set a fixed seed for reproducibility
+let mockConfig = Config(
+  beta: 0.1,
+  benefit: 1.0,
+  cost: 0.5,
+  depth: 1,
+  n_samples: 10,
+  t: 100,
+  seed: 42,
+  z: 5,
+  trial: 1,
+  step: 1,
+  p_states: {0.0: 0.5, 1.0: 0.5}.toTable,
+  p_roles: {"A": 0.3, "B": 0.7}.toTable,
+)
 suite "Agent Module Tests":
-  setup:
-    randomize(42) # Set a fixed seed for reproducibility
-    let mockConfig = Config(
-      beta: 0.1,
-      benefit: 1.0,
-      cost: 0.5,
-      depth: 1,
-      n_samples: 10,
-      t: 100,
-      seed: 42,
-      z: 5,
-      trial: 1,
-      step: 1,
-      p_states: {0.0: 0.5, 1.0: 0.5}.toTable,
-      p_roles: {"A": 0.3, "B": 0.7}.toTable,
-    )
-
   test "makeAgent creates an Agent with correct properties":
     var state = State(config: mockConfig, rng: initRand(42))
     let agent = makeAgent(0, state)
     let other = makeAgent(1, state)
 
-    check:
+    require:
       agent.id == 0
       agent.neighbors.len == 0
       agent.role in ["A", "B"]
@@ -99,55 +97,6 @@ suite "Agent Module Tests":
     agent.changeStrategy()
     check(agent.state == 0.0)
 
-  test "getPayout calculation":
-    var state = State(config: mockConfig)
-    let a = {"A": 1.0}.toTable
-    let b = {"B": 1.0}.toTable
-    state.valueNetwork = {"A": b, "B": a}.toTable
-
-    discard makeAgent(0, state)
-    discard makeAgent(1, state)
-    state.agents[0].state = 1.0
-    state.agents[1].state = 1.0
-    state.agents[0].role = "A"
-    state.agents[1].role = "B"
-    state.agents[0].addEdge(state.agents[1])
-
-    var payout = state.getPayOff(0)
-    let nSamples = state.agents[0].nSamples.float
-    let prior_cost = state.config.cost
-    state.config.cost = calculateCost(state, 0, prior_cost)
-    check:
-      payout == nSamples * (state.config.benefit - state.config.cost)
-
-    # non-criminal interacting with other non-criminals
-    #get nothing
-    state.agents[0].state = 0.0
-
-    state.config.cost = prior_cost
-    state.config.cost = calculateCost(state, 0, prior_cost)
-    payout = state.getPayOff(0)
-    check payout == 0.0
-    # criminal interacting with non-criminals should incur no cost if their only connection is non-criminal
-    state.agents[0].state = 1.0
-    state.agents[1].state = 0.0
-
-    state.config.cost = prior_cost
-    state.config.cost = calculateCost(state, 0, prior_cost)
-    check state.config.cost == 0.0
-    payout = state.getPayOff(0)
-    # should be zero as the only connection is non-criminal
-    # so the criminal degree is non-criminal
-    check payout == nSamples * state.config.cost
-
-    discard makeAgent(2, state)
-    state.agents[0].addEdge(state.agents[2])
-    state.agents[2].state = 1.0
-    state.agents[2].role = "B"
-    state.config.cost = calculateCost(state, 0, prior_cost)
-    check state.config.cost > 0.0
-    payout = state.getPayOff(0)
-
   test "step function":
     var state = State(config: mockConfig)
     let a = {"B": 1.0}.toTable
@@ -179,21 +128,220 @@ suite "Agent Module Tests":
       state.agents[0].parent == state.agents[1].parent
       state.agents[0].parent == a1.parent
 
-  test "check number of organizations":
+  test "check number of organizations simple":
     var state = State(config: mockConfig)
-    let a = {"B": 1.0}.toTable
-    let b = {"A": 1.0}.toTable
+    let a = {"A": 1.0}.toTable
+    let b = {"B": 1.0}.toTable
     state.valueNetwork = {"A": b, "B": a}.toTable
     var
       a1 = makeAgent(0, state)
       a2 = makeAgent(1, state)
-    # set all to criminals
     a1.state = 1.0
     a2.state = 1.0
-    # test for 1
+    a1.role = "A"
+    a2.role = "B"
     a1.addEdge(a2)
 
-    let availableRoles = a1.getAvailableRoles()
-    let nums = state.getPayoff(a1.id)
-    # should be succesfull every time
-    check nums == -5.0
+    let counts = a1.getCountOrganizations()
+    check counts.gangs == 1
+    check counts.firms == 1
+
+  test "check number of organizations":
+    var state = State(config: mockConfig)
+    let a = {"A": 1.0, "C": 1.0}.toTable
+    let b = {"B": 1.0, "C": 1.0}.toTable
+    let c = {"A": 1.0, "B": 1.0}.toTable
+    state.valueNetwork = {"A": b, "B": a, "C": c}.toTable
+    var
+      a0 = makeAgent(0, state)
+      a1 = makeAgent(1, state)
+      a2 = makeAgent(2, state)
+      a3 = makeAgent(3, state)
+    # set all to criminals
+    for a in state.agents:
+      a.state = 1.0
+
+    # Test this graph --> should be 2 organizations
+    #        - 2
+    #0 - 1 -
+    #        - 3
+    a0.role = "A"
+    a1.role = "B"
+    a2.role = "C"
+    a3.role = "C"
+
+    a0.addEdge(a1)
+    a1.addEdge(a2)
+    a1.addEdge(a3)
+
+    # test all agents
+    var solutions = @[(2, 2), (2, 2), (1, 1), (1, 1)]
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+
+  test "check number of organizations":
+    var state = State(config: mockConfig)
+    let a = {"B": 1.0, "C": 1.0}.toTable
+    let b = {"A": 1.0, "C": 1.0}.toTable
+    let c = {"A": 1.0, "B": 1.0}.toTable
+    state.valueNetwork = {"A": a, "B": b, "C": c}.toTable
+    var
+      a0 = makeAgent(0, state)
+      a1 = makeAgent(1, state)
+      a2 = makeAgent(2, state)
+      a3 = makeAgent(3, state)
+      a4 = makeAgent(4, state)
+    # set all to criminals
+    for a in state.agents:
+      a.state = 1.0
+
+    # Test this graph --> should be 2 organizations
+    #        - 2
+    #0 - 1 -
+    #        - 3 - 4
+    a0.role = "A"
+    a1.role = "B"
+    a2.role = "C"
+    a3.role = "C"
+    a4.role = "C"
+
+    a0.addEdge(a1)
+    a1.addEdge(a2)
+    a1.addEdge(a3)
+    a3.addEdge(a4)
+    let verbose = false
+
+    # if 4 has role C it has no organizations
+    # test all agents
+    var solutions = @[(2, 2), (2, 2), (1, 1), (1, 1), (0, 0)]
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      check (nums.gangs, nums.firms) == sol
+
+    a4.role = "B"
+    a4.state = 1.0
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+
+    a4.role = "A"
+    a4.state = 1.0
+    solutions = @[(2, 2), (3, 3), (1, 1), (2, 2), (1, 1)]
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+    a4.role = "A"
+    a4.state = 1.0
+    solutions = @[(2, 2), (3, 3), (1, 1), (2, 2), (1, 1)]
+    a4.addEdge(a0)
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      if verbose:
+        echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+
+    solutions = @[(0, 2), (0, 3), (0, 1), (0, 2), (0, 1)]
+    a1.state = 0.0
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+
+    solutions = @[(2, 2), (2, 3), (1, 1), (1, 2), (0, 1)]
+    a1.state = 1.0
+    a4.state = 0.0
+    for (a, sol) in zip(state.agents, solutions):
+      let nums = a.getCountOrganizations()
+      echo (a.id, (nums.gangs, nums.firms), sol)
+      require (nums.gangs, nums.firms) == sol
+      echo state.agents.len
+
+  test "Test VN 4":
+    var state = State(config: mockConfig)
+    let a = {"B": 1.0, "C": 1.0, "D": 1.0}.toTable()
+    let b = {"A": 1.0, "C": 1.0, "D": 1.0}.toTable()
+    let c = {"A": 1.0, "B": 1.0, "D": 1.0}.toTable()
+    let d = {"A": 1.0, "B": 1.0, "C": 1.0}.toTable()
+    var valueNetwork = initTable[string, Table[string, float]]()
+    state.valueNetwork = {"A": a, "B": b, "C": c, "D": d}.toTable()
+    for idx in (0 .. 4):
+      discard makeAgent(idx, state)
+    for agent in state.agents:
+      agent.state = 1.0
+    #        - 2
+    #0 - 1 -
+    #        - 3 - 4
+    state.agents[0].role = "A"
+    state.agents[1].role = "B"
+    state.agents[2].role = "C"
+    state.agents[3].role = "C"
+    state.agents[4].role = "D"
+    state.agents[0].addEdge(state.agents[1])
+    state.agents[1].addEdge(state.agents[2])
+    state.agents[1].addEdge(state.agents[3])
+    state.agents[2].addEdge(state.agents[4])
+    for a in state.agents:
+      let nums = a.getCountOrganizations()
+      check nums.gangs == 0
+      check nums.firms == 0
+
+    test "getPayout calculation":
+      # Create a single organization of A-B
+      var state = State(config: mockConfig)
+      let a = {"A": 1.0}.toTable
+      let b = {"B": 1.0}.toTable
+      state.valueNetwork = {"A": b, "B": a}.toTable
+
+      # First test the criminal network
+      discard makeAgent(0, state)
+      discard makeAgent(1, state)
+      state.agents[0].state = 1.0
+      state.agents[1].state = 1.0
+      state.agents[0].role = "A"
+      state.agents[1].role = "B"
+      state.agents[0].addEdge(state.agents[1])
+
+      var payout = state.getPayOff(0)
+      let nSamples = state.agents[0].nSamples.float
+      let prior_cost = state.config.cost
+      state.config.cost = calculateCost(state, 0, prior_cost)
+      check payout == (state.config.benefit - state.config.cost)
+
+      # non-criminal interacting with other non-criminals
+      #get nothing
+      state.agents[0].state = 0.0
+
+      state.config.cost = prior_cost
+      state.config.cost = calculateCost(state, 0, prior_cost)
+      payout = state.getPayoff(0)
+
+      # criminal interacting with non-criminals should ncu#no   cost if their only connection is non-criminal
+      state.agents[0].state = 1.0
+      state.agents[1].state = 0.0
+
+      state.config.cost = prior_cost
+      state.config.cost = calculateCost(state, 0, prior_cost)
+      check state.config.cost == 0.0
+      payout = state.getPayoff(0) # should be the same asthecost
+      # should be zero as the only connection is on-criminal
+      # so the criminal degree is non-criminal
+      check payout == -state.config.cost
+
+      discard makeAgent(2, state)
+      state.agents[0].addEdge(state.agents[2])
+
+      state.agents[1].state = 1.0
+      state.agents[2].state = 1.0
+      state.agents[2].role = "B"
+      state.config.cost = prior_cost
+      state.config.cost = calculateCost(state, 0, prior_cost)
+      payout = state.getPayoff(0)
+      # 2 organizations so we get one benefit and 2 egatives
+
+      # the agent should be able to make two (criminal)rganizations
+      require payout == state.config.benefit * 2 - 2 * state.config.cost

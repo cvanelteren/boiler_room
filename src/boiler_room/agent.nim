@@ -1,7 +1,7 @@
 import
   std/[
     sequtils, random, math, strutils, tables, sets, strformat, strutils, tables,
-    sequtils, terminal, options, sets,
+    sequtils, terminal, options, sets, hashes, deques, algorithm,
   ]
 import os
 import nimpy
@@ -70,6 +70,18 @@ type
     inEquilibrium*: bool
     mutationAfter*: float
 
+  Counter = ref object
+    gangs*, firms*: int
+
+  Crawler = ref object
+    organization: seq[int]
+    roles: HashSet[string]
+    seen: HashSet[int]
+
+  OrgCandidate = object
+    members: HashSet[int]
+    roles: HashSet[string]
+
 import utils
 
 proc random_role(s: var State): string =
@@ -109,10 +121,8 @@ proc makeAgent*(id: int, state: var State): Agent =
   )
   state.agents.add result
 
-proc addEdge*(this: var Agent, other: var Agent, directed = false) =
+proc addEdge*(this, other: var Agent, directed = false) =
   if this.id == other.id:
-    return
-  if other.id >= this.parent.agents.len:
     return
 
   this.neighbors[other.id] = 1
@@ -252,22 +262,6 @@ proc sample(agent: Agent, state: var State, order: int): float =
       # attempt.inc
   result = agent.energy(interactions, state)
 
-proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
-  let agent = state.agents[agent]
-  if agent.neighbors.len == 0 or state.rng.rand(1.0) < agent.mutationRate:
-    var other = state.rng.sample(state.agents).id
-    while state.agents[other].id == agent.id:
-      other = state.rng.sample(state.agents).id
-    return other
-
-  # sample a random neighbor of neighbors
-  if agent.neighbors.len > 0:
-    result = state.rng.sample(agent.neighbors.keys().toseq())
-    if state.agents[result].neighbors.len > 0:
-      return state.rng.sample(state.agents[result].neighbors.keys().toseq())
-  # default option:
-  return agent.id
-
 proc calculateCost*(state: State, agent: int, prior_cost: float): float {.inline.} =
   # compute the criminal cost proportional to its degree
   let z = 1.0 / (state.agents.len.float - 1.0)
@@ -299,66 +293,92 @@ proc rejectMutation(state: var State, currents: seq[Mutation]) {.inline.} =
     state.agents[current.id].neighbors = current.neighbors
     state.agents[current.id].role = current.role
 
-proc getPayoff(
-    state: var State,
-    id: int,
-    seenRoles: HashSet[string],
-    seenAgents: HashSet[int],
-    order = 1,
-): float =
-  # bfs implementation of getting all possible games
-  # Mind the spelling, we are currently seeingRoles and the other is roles we have seen
-  var seesRoles = initTable[string, HashSet[int]]()
-  var seenAgents = seenAgents
-  var seenRoles = seenRoles
-  seenRoles.incl state.agents[id].role # add current role, we don't need it any more
-  var allSeen = initCountTable[string]()
-  # find potential partners that one could form an organization
-  # with  while ignoring the ther agents
-  for neighbor in state.agents[id].neighbors.keys():
-    let role = state.agents[neighbor].role
+proc pop(crawler: var Crawler, agent: Agent) {.inline.} =
+  discard crawler.organization.pop()
+  discard crawler.roles.pop()
 
-    # the cost is proportional to all games we could play
-    if role notin seenRoles:
-      allSeen.inc role
-    # skip in the case we have seen the agent already
-    if neighbor in seenAgents:
-      continue
-    # we have seen the roles already
-    if role in seenRoles:
-      continue
-    # they are not criminal
-    if state.agents[neighbor].state != 1.0:
-      continue
+proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter =
+  result = Counter(gangs: 0, firms: 0)
 
-    if seesRoles.hasKeyOrPut(role, @[neighbor].toHashSet()):
-      seesRoles[role].incl neighbor
-      seenAgents.incl neighbor
+  if depth == 0:
+    crawler.roles.incl agent.role
+    return result
+  elif crawler.roles.len == 0:
+    result.firms += 1
+    if agent.state == 1.0:
+      result.gangs += 1
+    crawler.roles.incl agent.role
+    return result
 
-  result = 1
-  var residual = 0.0
-  var z = 1.0
-  let center = state.agents[id].role
-  if order > 0:
-    for role in state.valueNetwork[center].keys():
-      if allSeen.hasKey(role):
-        z *= allSeen[role].float
-      if not seesRoles.hasKey(role):
-        result = 0.0
-        continue
-      result *= seesRoles[role].len.float
-      for neighbor in seesRoles[role]:
-        residual +=
-          getPayoff(
-            state,
-            neighbor,
-            seenRoles = seenRoles,
-            seenAgents = seenAgents,
-            order = order - 1,
-          )
+  # We first look at our surrounding
+  var firms = initCountTable[string]()
+  var gangs = initCountTable[string]()
+  var seen = initHashset[int]()
+  var options: seq[int] = @[]
+  for other in agent.neighbors.keys():
+    let role = agent.parent.agents[other].role
+    seen.incl other
+    if other notin crawler.seen:
+      if role in crawler.roles:
+        firms.inc role
+        options.add other # we can take this as an option to  go deeper
+        if agent.parent.agents[other].state == 1.0:
+          gangs.inc role
+
+  # If the count of the firms matches what is left
+  # we can make some organizations
+  if firms.len == crawler.roles.len:
+    result.firms += prod firms.values().toseq()
+  # The same holds true for all the criminals
+  if gangs.len == crawler.roles.len:
+    result.gangs += gangs.values().toseq().prod() * agent.state.int
+
+  for option in options:
+    crawler.seen = crawler.seen + seen
+    crawler.roles.excl agent.parent.agents[option].role
+    if crawler.roles.len > 0:
+      let subcount = countOrganizations(agent.parent.agents[option], crawler, depth - 1)
+      result.firms += subcount.firms
+      result.gangs += subcount.gangs * agent.state.int
+    crawler.roles.incl agent.parent.agents[option].role
+
+  crawler.roles.incl agent.role
+
+proc getCountOrganizations*(agent: Agent): Counter =
+  #if agent.state == 0.0:
+  #  return Counter(gangs: 0, firms: 0)
+  #let maxDepth = agent.parent.valueNetwork[agent.role].len
+  let maxDepth = 2
+  let toFind = agent.parent.valueNetwork[agent.role].keys().toseq().toHashSet()
+
+  var crawler = Crawler(roles: toFind, seen: initHashSet[int]())
+  crawler.roles.excl agent.role
+  result = countOrganizations(agent, crawler, depth = maxDepth)
+
+proc getPayoff*(state: State, agentId: int): float =
+  if state.agents[agentID].state == 0.0:
+    return 0.0
+  let counts = getCountOrganizations(state.agents[agentId])
   result =
-    state.config.benefit * result + residual -
-    state.agents[id].state * z * state.config.cost
+    state.agents[agentID].state *
+    (state.config.benefit * counts.gangs.float - state.config.cost * counts.firms.float)
+  #echo &"payoff: {result}"
+
+proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
+  let agent = state.agents[agent]
+  if agent.neighbors.len == 0 or state.rng.rand(1.0) < agent.mutationRate:
+    var other = state.rng.sample(state.agents).id
+    while state.agents[other].id == agent.id:
+      other = state.rng.sample(state.agents).id
+    return other
+
+  # sample a random neighbor of neighbors
+  if agent.neighbors.len > 0:
+    result = state.rng.sample(agent.neighbors.keys().toseq())
+    if state.agents[result].neighbors.len > 0:
+      return state.rng.sample(state.agents[result].neighbors.keys().toseq())
+  # default option:
+  return agent.id
 
 proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.} =
   var currents = @[state.agents[agent].makeMutation()] # store the current state
@@ -374,8 +394,8 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
 
   let seenNeighbors = HashSet[int]()
   let seenRoles = HashSet[string]()
-  buffer[0] =
-    state.getPayoff(agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1)
+  let M = state.valueNetwork[state.agents[agent].role].len
+  buffer[0] = state.getPayoff(agent)
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
     currents.add(state.agents[other].makeMutation())
@@ -383,15 +403,11 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
     performEdgeAction(state, agent, other)
     # adj changes so we recompute the cost
     state.config.cost = calculateCost(state, agent, prior_cost)
-    buffer[1] = state.getPayoff(
-      agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1
-    )
+    buffer[1] = state.getPayoff(agent)
   else:
     let prior = state.agents[agent].state
     changeStrategy(state.agents[agent])
-    buffer[1] = state.getPayoff(
-      agent, seenRoles = seenRoles, seenAgents = seenNeighbors, order = 1
-    )
+    buffer[1] = state.getPayoff(agent)
 
   # check if we accept new state
   let delta = buffer[1] - buffer[0]
