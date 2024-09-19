@@ -5,6 +5,7 @@ author        = "cvanelteren"
 description   = "Computational model for simulating criminal markets"
 license       = "MIT"
 srcDir        = "src"
+backend       = "cpp"
 
 # Dependencies
 requires "nim >= 1.4.8"

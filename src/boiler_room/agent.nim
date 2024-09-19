@@ -387,7 +387,7 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
   let prior_benefit = state.config.benefit
 
   # Cost is computed proportional to the criminal degree
-  state.config.cost = calculateCost(state, agent, prior_cost)
+  #state.config.cost = calculateCost(state, agent, prior_cost)
   # compute the payoff in the current state
   let role = state.agents[agent].role
   let order = state.valueNetwork[role].len + 1
@@ -402,7 +402,7 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
     # add or remove an agent
     performEdgeAction(state, agent, other)
     # adj changes so we recompute the cost
-    state.config.cost = calculateCost(state, agent, prior_cost)
+    #state.config.cost = calculateCost(state, agent, prior_cost)
     buffer[1] = state.getPayoff(agent)
   else:
     let prior = state.agents[agent].state
