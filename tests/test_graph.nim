@@ -7,6 +7,7 @@ import boiler_room.graph
 {.passC: "-std=gnu++17".}
 {.passL: "-lstdc++".}
 
+# TODO: would be nice to make this dynamic or passed on as when built
 {.
   passC: "-I /home/casper/micromamba/envs/boiler/lib/python3.12/site-packages/include/"
 .}
@@ -19,7 +20,7 @@ from boiler_room.graph import
   Graph, numberOfNodes, hasNode, addNode, removeNode, addEdge, removeEdge,
   getEgoNetwork, toGraph
 from boiler_room.graph import
-  getBetweenness, getCloseness, getDegreeCentrality, getAttributeAssorativity
+  getBetweenness, getCloseness, getDegreeCentrality, getAttributeAssortativity
 
 randomize(42) # Set a fixed seed for reproducibility
 
@@ -68,59 +69,14 @@ suite "Graph Operations":
     # You might want to add more specific checks for edges
 
   test "Ego Network":
-    let state = createMockState(10)
-    let graph = state.toGraph
-    let egoNetwork = graph.getEgoNetwork(0)
-    check(egoNetwork.numberOfNodes() > 0)
-    check(egoNetwork.numberOfNodes() <= graph.numberOfNodes())
-
-suite "Centrality Measures":
-  test "Betweenness Centrality":
-    let state = createMockState(10)
-    let betweenness = state.getBetweenness()
-    check(betweenness.len == 10)
-    for _, value in betweenness:
-      check(value >= 0.0)
-
-  test "Closeness Centrality":
-    let state = createMockState(10)
-    let closeness = state.getCloseness()
-    check(closeness.len == 10)
-    for _, value in closeness:
-      check(value >= 0.0 and value <= 1.0)
-
-  test "Degree Centrality":
-    let state = createMockState(10)
-    let degree = state.getDegreeCentrality()
-    check(degree.len == 10)
-    for _, value in degree:
-      check(value >= 0.0)
-
-suite "Attribute Assortativity":
-  test "Attribute Assortativity Calculation":
-    let state = createMockState(20)
-    #let assortativity = state.getAttributeAssorativity()
-    #for node, assortativity in assortativity:
-    #check(assortativity >= -1.0 and assortativity <= 1.0)
-
-  test "Attribute Assortativity for Homogeneous Network":
-    var state = createMockState(10)
-    for agent in state.agents.mitems:
-      agent.role = "A"
-    #let assortativities = state.getAttributeAssorativity()
-    #for node, assortativity in assortativities:
-    #check(assortativity.abs < 1e-6) # Should be close to 0 for homogeneous network
-
-  test "Attribute Assortativity for Perfectly Assortative Network":
-    var state = createMockState(10)
-    for i, agent in state.agents.mpairs:
-      agent.role = if i < 5: "A" else: "B"
-    for i in 0 ..< 5:
-      for j in 1 .. 4:
-        state.agents[i].addEdge(state.agents[i + j]) # Connect only to different role
-    #let assortativities = state.getAttributeAssorativity()
-    #for node, assortativity in assortativities:
-    #  check(assortativity > 0.9) # Should be close to 1 for perfectly assortative network
+    var g = newGraph(5)
+    g.addEdge(0, 1)
+    g.addEdge(0, 2)
+    g.addEdge(0, 3)
+    g.addEdge(0, 4)
+    let egoNetwork = g.getEgoNetwork(ego = 0)
+    check egoNetwork.numberOfNodes() == 5
+    echo egoNetwork.numberOfEdges() == 4
 
 suite "Graph Modifications":
   test "Remove Node":
@@ -132,10 +88,79 @@ suite "Graph Modifications":
     check(not graph.hasNode(2))
 
   test "Adding and removing edges":
-    var state = createMockState(5)
-    var graph = state.toGraph
+    var graph = newGraph(5)
     for idx in 0 ..< 5:
       graph.addEdge(idx, (idx + 1) mod 5)
-    check graph.numberOfEdges() == 6
-    graph.removeEdge(0, 1)
     check graph.numberOfEdges() == 5
+    graph.removeEdge(0, 1)
+    check graph.numberOfEdges() == 4
+
+suite "Centrality Measures":
+  test "Betweenness Centrality":
+    let state = createMockState(10)
+    let g = state.toGraph()
+    let betweenness = g.getBetweenness()
+    check(betweenness.len == 10)
+    for _, value in betweenness:
+      check(value >= 0.0)
+
+  test "Closeness Centrality":
+    let state = createMockState(10)
+    let g = state.toGraph()
+    let closeness = g.getCloseness()
+    check(closeness.len == 10)
+    for _, value in closeness:
+      check(value >= 0.0 and value <= 1.0)
+
+  test "Degree Centrality":
+    let state = createMockState(10)
+    let g = state.toGraph()
+    let degree = g.getDegreeCentrality()
+    check(degree.len == 10)
+    for _, value in degree:
+      check(value >= 0.0)
+
+suite "Attribute Assortativity":
+  test "Attribute Assortativity Calculation":
+    let state = createMockState(20)
+    let assortativity = state.getAttributeAssortativity()
+    for node, assortativity in assortativity:
+      require(assortativity >= -1.0 and assortativity <= 1.0)
+
+  test "Attribute Assortativity for Perfectly Assortative Network":
+    var state = createMockState(2)
+    state.agents[0].role = "A"
+    state.agents[1].role = "A"
+    state.agents[0].addEdge(state.agents[1])
+    let assortativities = state.getAttributeAssortativity()
+    for node, assortativity in assortativities:
+      # Should be close to 1 for perfectly assortative network
+      require assortativity == 1.0
+  test "Perfect dissorativity":
+    var state = createMockState(2)
+    state.agents[0].role = "A"
+    state.agents[1].role = "B"
+    state.agents[0].addEdge(state.agents[1])
+    let assortativities = state.getAttributeAssortativity()
+    for node, assortativity in assortativities:
+      # Should be close to -1 for perfectly disassortative network
+      require assortativity == -1.0
+  test "Zero Assortativity":
+    var state = createMockState(3)
+    state.agents[0].role = "A"
+    state.agents[1].role = "B"
+    state.agents[2].role = "A"
+    for agent in state.agents:
+      agent.neighbors.clear()
+      require agent.neighbors.len == 0
+    state.agents[0].addEdge(state.agents[1])
+    state.agents[0].addEdge(state.agents[2])
+
+    let assortativities = state.getAttributeAssortativity()
+    for node, assortativity in assortativities:
+      if node == 0:
+        require (assortativity + 0.3333333333) < 1e-6
+      elif node == 1:
+        require assortativity == -1.0
+      elif node == 2:
+        require assortativity == 1.0

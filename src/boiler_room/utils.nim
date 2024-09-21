@@ -89,6 +89,10 @@ proc readParams*(fp: string, target: string = "general"): Config =
   if "n_samples" in tmp[target]:
     result.n_samples = tmp[target]["n_samples"].getInt()
 
+  result.mutationRate = tmp["general"]["mutationRate"].getFloat()
+  if "mutationRate" in tmp[target]:
+    result.mutationRate = tmp[target]["mutationRate"].getFloat()
+
   result.step = 1
   if "N" in tmp[target]:
     result.step = tmp[target]["N"].getInt()
