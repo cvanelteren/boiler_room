@@ -21,17 +21,19 @@ type
     trial*, n_trials*: int
     step*: int
 
-    p_states*: Table[float, float]
+    p_states*: Table[bool, float]
     p_roles*: Table[string, float]
 
-  Agent* = ref object
+  Agent* {.sendable.} = ref object
     id*: int
-    state*: float
+    state*: bool
     role*: string
     neighbors*: Table[int, int]
     bias*: float
     nSamples*: int
     edgeRate*: float
+    benefits*: float
+    costs*: float
     mutationRate*: float
     parent*: State
 
@@ -39,12 +41,14 @@ type
   # This makes it more memory efficient (potentially)
   Mutation* = object
     id*: int
-    state*: float
+    state*: bool
     neighbors*: Table[int, int]
     role*: string
+    benefits*: float
+    costs*: float
 
   # Hold the simulation
-  State* = ref object
+  State* {.sendable.} = ref object
     agents*: seq[Agent]
     rng*: Rand
     valueNetwork*: Table[string, Table[string, float]]
@@ -53,8 +57,10 @@ type
   # Convert to a pandas row entry
   DataPoint* =
     tuple[
-      states: seq[seq[float]],
+      states: seq[seq[bool]],
       roles: seq[seq[string]],
+      benefits: seq[seq[float]],
+      costs: seq[seq[float]],
       benefit, cost, beta: float,
       adj: seq[Table[int, seq[int]]],
       trial: int,
@@ -72,11 +78,19 @@ type
 
   Counter = ref object
     gangs*, firms*: int
+    seen*: HashSet[int]
 
   Crawler = ref object
     organization: seq[int]
     roles: HashSet[string]
     seen: HashSet[int]
+    role_seen: HashSet[int]
+
+  Explorer = ref object
+    organization: seq[int]
+    roles: HashSet[string]
+    seen: HashSet[HashSet[int]]
+    counter: Counter
 
   OrgCandidate = object
     members: HashSet[int]
@@ -89,7 +103,7 @@ proc random_role(s: var State): string =
     s.config.p_roles.keys().toseq(), s.config.p_roles.values.toseq.cumsummed()
   )
 
-proc drawState(s: var State): float =
+proc drawState(s: var State): bool =
   result = s.rng.sample(
     s.config.p_states.keys().toseq(), s.config.p_states.values().toseq().cumsummed()
   )
@@ -118,6 +132,8 @@ proc makeAgent*(id: int, state: var State): Agent =
     edgeRate: 0.0,
     mutationRate: 0.0,
     parent: state,
+    benefits: 0.0,
+    costs: 0.0,
   )
   state.agents.add result
 
@@ -149,7 +165,7 @@ proc makeNetwork*(state: var State, g: PyObject) =
 
     # assign a state
     if "state" in node_defaults:
-      agent.state = node_defaults["state"].to float
+      agent.state = (node_defaults["state"].to bool)
     else:
       agent.state = state.drawState()
 
@@ -228,7 +244,12 @@ proc getAvailableRoles*(agent: Agent): Table[string, seq[int]] =
 
 proc makeMutation(agent: Agent): Mutation {.inline.} =
   result = Mutation(
-    id: agent.id, neighbors: agent.neighbors, state: agent.state, role: agent.role
+    id: agent.id,
+    neighbors: agent.neighbors,
+    state: agent.state,
+    role: agent.role,
+    benefits: agent.benefits,
+    costs: agent.costs,
   )
 
 proc generateSnapshots*(t, n: int): seq[int] =
@@ -245,7 +266,7 @@ proc calculateCost*(state: State, agent: int, prior_cost: float): float {.inline
   return state.agents[agent].neighbors.len().float * prior_cost
   result = 0.0
   for neighbor in state.agents[agent].neighbors.keys():
-    if state.agents[neighbor].state == 1.0:
+    if state.agents[neighbor].state == true:
       result += 1.0
   result = result * prior_cost
 
@@ -258,7 +279,7 @@ proc performEdgeAction(state: var State, agent, other: int) {.inline.} =
     state.agents[agent].addEdge(state.agents[other])
 
 proc changeStrategy*(agent: var Agent) {.inline.} =
-  agent.state = if agent.state == 1.0: 0.0 else: 1.0
+  agent.state = if agent.state == true: false else: true
 
 proc acceptMutation(
     state: State, currents: seq[Mutation], mutations: var seq[Mutation]
@@ -276,7 +297,15 @@ proc pop(crawler: var Crawler, agent: Agent) {.inline.} =
   discard crawler.organization.pop()
   discard crawler.roles.pop()
 
-proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter =
+proc energy(agent: Agent, interactions: seq[float], state: State): float =
+  let k = agent.neighbors.len.float
+  result =
+    agent.parent.config.benefit * interactions.prod -
+    agent.parent.config.cost * interactions[0] * k.pow(1.0)
+
+proc countOrganizations(
+    agent: Agent, crawler: var Crawler, depth: int
+): Counter {.inline.} =
   result = Counter(gangs: 0, firms: 0)
 
   if depth == 0:
@@ -284,7 +313,7 @@ proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter
     return result
   elif crawler.roles.len == 0:
     result.firms += 1
-    if agent.state == 1.0:
+    if agent.state == true:
       result.gangs += 1
     crawler.roles.incl agent.role
     return result
@@ -294,6 +323,11 @@ proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter
   var gangs = initCountTable[string]()
   var seen = initHashset[int]()
   var options: seq[int] = @[]
+
+  #for other in crawler.role_seen:
+  #  firms.inc agent.parent.agents[other].role
+  #  if agent.parent.agents[other].state == 1.0:
+  #    gangs.inc agent.parent.agents[other].role
   for other in agent.neighbors.keys():
     let role = agent.parent.agents[other].role
     seen.incl other
@@ -301,7 +335,7 @@ proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter
       if role in crawler.roles:
         firms.inc role
         options.add other # we can take this as an option to  go deeper
-        if agent.parent.agents[other].state == 1.0:
+        if agent.parent.agents[other].state == true:
           gangs.inc role
 
   # If the count of the firms matches what is left
@@ -322,24 +356,38 @@ proc countOrganizations(agent: Agent, crawler: var Crawler, depth: int): Counter
     crawler.roles.incl agent.parent.agents[option].role
   crawler.roles.incl agent.role
 
-proc getCountOrganizations*(agent: Agent): Counter =
-  #if agent.state == 0.0:
-  #  return Counter(gangs: 0, firms: 0)
+proc getCountOrganizations*(
+    agent: Agent, seen = initHashSet[int](), maxDepth = 2
+): Counter {.inline.} =
+  if agent.state == false:
+    return Counter(gangs: 0, firms: 0)
   #let maxDepth = agent.parent.valueNetwork[agent.role].len
-  let maxDepth = 2
   let toFind = agent.parent.valueNetwork[agent.role].keys().toseq().toHashSet()
 
-  var crawler = Crawler(roles: toFind, seen: initHashSet[int]())
+  var crawler = Crawler(roles: toFind, seen: seen)
   crawler.roles.excl agent.role
   result = countOrganizations(agent, crawler, depth = maxDepth)
 
-proc getPayoff*(state: State, agentId: int): float =
-  if state.agents[agentID].state == 0.0:
-    return 0.0
-  let counts = getCountOrganizations(state.agents[agentId])
-  result =
-    state.agents[agentID].state *
-    (state.config.benefit * counts.gangs.float - state.config.cost * counts.firms.float)
+proc getCost(a: Agent, alpha = 2.0): float =
+  for neighbor in a.neighbors.keys():
+    result += a.parent.agents[neighbor].state.float
+  result = a.parent.config.cost * result.pow(alpha)
+
+proc getPayoff*(state: State, agentId: int): float {.inline.} =
+  let agent = state.agents[agentId]
+  let counts = getCountOrganizations(agent)
+  var seen = counts.seen
+  let benefit = state.config.benefit
+  let cost = state.config.cost
+
+  var totalBenefit = agent.state.float * benefit * counts.gangs.float
+  var totalCost = agent.getCost()
+
+  #var totalCost = getCost(agent)
+
+  result = totalBenefit - totalCost
+  agent.benefits = totalBenefit
+  agent.costs = totalCost
 
 proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
   let agent = state.agents[agent]
@@ -351,9 +399,13 @@ proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
 
   # sample a random neighbor of neighbors
   if agent.neighbors.len > 0:
+    var options = agent.neighbors.keys().toseq()
     result = state.rng.sample(agent.neighbors.keys().toseq())
     if state.agents[result].neighbors.len > 0:
-      return state.rng.sample(state.agents[result].neighbors.keys().toseq())
+      for other in state.agents[result].neighbors.keys():
+        if other notin options:
+          options.add other
+      return state.rng.sample(options)
   # default option:
   return agent.id
 
@@ -378,18 +430,15 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
     currents.add(state.agents[other].makeMutation())
     # add or remove an agent
     performEdgeAction(state, agent, other)
-    # adj changes so we recompute the cost
-    #state.config.cost = calculateCost(state, agent, prior_cost)
     buffer[1] = state.getPayoff(agent)
   else:
     let prior = state.agents[agent].state
+    let s = state.agents[agent].state
     changeStrategy(state.agents[agent])
     buffer[1] = state.getPayoff(agent)
 
   # check if we accept new state
   let delta = buffer[1] - buffer[0]
-  # echo &"{z * delta=} {buffer=}"
-  # sleep(100)
   let p = fermiUpdate(delta, state.config.beta)
   if state.rng.rand(1.0) < p:
     acceptMutation(state, currents, mutations)
@@ -419,11 +468,11 @@ proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
       result[snap] = mutations
       snap.inc
     mutations = @[]
+    #let agent = state.rng.sample(agents)
+    #state.step(agent, mutations)
+
     state.rng.shuffle(agents)
-    # let agent = state.rng.sample(agents)
-    # state.step(state.rng.sample(agents), mutations)
-    for agent in agents:
-      #NOTE: will add to mutations if new state is accepted
+    for agent in agents: #NOTE: will add to mutations if new state is accepted
       state.step(agent, mutations)
 
 proc makeBuffer(

@@ -2,19 +2,28 @@ import sequtils, parsetoml, strutils, strformat
 from agent import Config, Mutation, DataPoint, State
 
 proc to*(mutations: seq[seq[Mutation]], T: typedesc): DataPoint =
-  result.states = newSeqWith(mutations.len, newSeq[float]())
+  result.states = newSeqWith(mutations.len, newSeq[bool]())
   result.adj = newSeqWith(mutations.len, initTable[int, seq[int]]())
+  result.benefits = newSeqWith(mutations.len, newSeq[float]())
+  result.costs = newSeqWith(mutations.len, newSeq[float]())
   for agent in mutations[0]:
     result.states[0].add agent.state
     result.adj[0][agent.id] = agent.neighbors.keys().toseq()
+    result.benefits[0].add agent.benefits
+    result.costs[0].add agent.costs
 
   # start from 1 but the index here starts at 0
   for kdx, mutation in mutations[1 ..^ 1]:
     result.states[kdx + 1] = result.states[kdx]
     result.adj[kdx + 1] = result.adj[kdx]
+    result.benefits[kdx + 1] = result.benefits[kdx]
+    result.costs[kdx + 1] = result.costs[kdx]
+
     for agent in mutation:
       result.states[kdx + 1][agent.id] = agent.state
       result.adj[kdx + 1][agent.id] = agent.neighbors.keys().toseq()
+      result.benefits[kdx + 1][agent.id] = agent.benefits
+      result.costs[kdx + 1][agent.id] = agent.costs
 
 proc create_data_name(
     base: string, config: Config, ext = ".json", additional = ""
@@ -44,9 +53,9 @@ proc readParams*(fp: string, target: string = "general"): Config =
   var s = tmp["general"]["p_states"].getElems.mapIt(it.getFloat)
   if "p_states" in tmp[target]:
     s = tmp[target]["p_states"].getElems.mapIt(it.getFloat)
-  result.p_states = initTable[float, float]()
+  result.p_states = initTable[bool, float]()
   for idx, si in s:
-    result.p_states[idx.float] = si
+    result.p_states[idx.bool] = si
 
   # load constants
   result.z = tmp["general"]["z"].getInt

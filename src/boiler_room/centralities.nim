@@ -1,13 +1,13 @@
 import sequtils, sets, tables, math
 from boiler_room.agent import State, Agent
 
-proc degreeCentrality*(state: State): Table[int, float] =
+proc degreeCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
   let n = state.agents.len.float
   for agent in state.agents:
     result[agent.id] = agent.neighbors.len.float
 
-proc closenessCentrality*(state: State): Table[int, float] =
+proc closenessCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
   let n = state.agents.len
 
@@ -44,7 +44,7 @@ proc closenessCentrality*(state: State): Table[int, float] =
 
   return result
 
-proc betweennessCentrality*(state: State): Table[int, float] =
+proc betweennessCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
   let n = state.agents.len
 
@@ -106,7 +106,7 @@ proc normalizedCentrality*(centrality: Table[int, float]): Table[int, float] =
   for k, v in centrality.pairs:
     result[k] = v / maxValue
 
-proc subgraphFrom*(graph: State, nodeIds: seq[int]): State =
+proc subgraphFrom*(graph: State, nodeIds: seq[int]): State {.inline.} =
   var subgraphAgents: seq[Agent] = @[]
   let nodeIdSet = nodeIds.toHashSet()
 
@@ -132,7 +132,7 @@ proc subgraphFrom*(graph: State, nodeIds: seq[int]): State =
 
   return State(agents: subgraphAgents)
 
-proc createEgoGraph*(state: State, agentId: int): State =
+proc createEgoGraph*(state: State, agentId: int): State {.inline.} =
   # Create a set of agent IDs to include in the ego graph
   var egoNodeIds = initHashSet[int]()
 
@@ -179,7 +179,7 @@ proc createEgoGraph*(state: State, agentId: int): State =
   result =
     State(agents: egoAgents, valueNetwork: state.valueNetwork, config: state.config)
 
-proc roleAssortativity*(graph: State, focalAgentId: int): float =
+proc roleAssortativity*(graph: State, focalAgentId: int): float {.inline.} =
   var roleCounts = initCountTable[string]()
   var edgesByRoles = initTable[string, CountTable[string]]()
   var totalEdges = 0
@@ -218,7 +218,7 @@ proc roleAssortativity*(graph: State, focalAgentId: int): float =
   if totalEdges == 0: # No edges in the ego network
     result = 0.0
 
-proc roleAssortativityCentrality*(state: State): Table[int, float] =
+proc roleAssortativityCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
 
   for agent in state.agents:
