@@ -5,7 +5,7 @@ import
   ]
 import os
 import nimpy
-let np = pyImport("numpy")
+let np = pyImport "numpy"
 let nx = pyImport "networkx"
 let pd = pyImport "pandas"
 let pycopy = pyImport "copy"
@@ -13,7 +13,7 @@ let pycopy = pyImport "copy"
 
 type
   # Holds the confiruation of the simulation
-  Config* = ref object
+  Config* {.sendable.} = ref object
     beta*, benefit*, cost*, edgeRate*, mutationRate*: float
 
     depth*: int
@@ -39,7 +39,7 @@ type
 
   # Store the mutations of the simulation over time
   # This makes it more memory efficient (potentially)
-  Mutation* = object
+  Mutation* = ref object
     id*: int
     state*: bool
     neighbors*: Table[int, int]
@@ -65,6 +65,8 @@ type
       adj: seq[Table[int, seq[int]]],
       trial: int,
       start_criminality, start_density: float,
+      kind_intervention, which_intervention: string,
+      n_intervention: int,
     ]
 
   SimInfo {.sendable.} = ref object
@@ -85,16 +87,6 @@ type
     roles: HashSet[string]
     seen: HashSet[int]
     role_seen: HashSet[int]
-
-  Explorer = ref object
-    organization: seq[int]
-    roles: HashSet[string]
-    seen: HashSet[HashSet[int]]
-    counter: Counter
-
-  OrgCandidate = object
-    members: HashSet[int]
-    roles: HashSet[string]
 
 import utils
 
