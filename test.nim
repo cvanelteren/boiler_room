@@ -1,8 +1,4 @@
-import tables, strutils, strformat, weave
+import math, algorithm
 
-var a = "test".open()
-echo type(a)
-a.close()
-proc task(x: int): int =
-  return x
-
+echo (0.0).pow(1.0)
+echo (1.0).pow(0.0)

@@ -361,8 +361,14 @@ proc getCountOrganizations*(
   result = countOrganizations(agent, crawler, depth = maxDepth)
 
 proc getCost(a: Agent, alpha = 2.0): float =
+  var neighbors = initHashSet[int]()
   for neighbor in a.neighbors.keys():
-    result += a.parent.agents[neighbor].state.float
+    neighbors.incl neighbor
+    for other in a.parent.agents[neighbor].neighbors.keys():
+      neighbors.incl other
+    ##result += 1.0
+    #result += a.parent.agents[neighbor].state.float
+  result = neighbors.len.float
   result = a.parent.config.cost * result.pow(alpha)
 
 proc getPayoff*(state: State, agentId: int): float {.inline.} =
@@ -372,32 +378,35 @@ proc getPayoff*(state: State, agentId: int): float {.inline.} =
   let benefit = state.config.benefit
   let cost = state.config.cost
 
-  var totalBenefit = agent.state.float * benefit * counts.gangs.float
-  var totalCost = agent.getCost()
-
-  #var totalCost = getCost(agent)
-
-  result = totalBenefit - totalCost
+  var totalBenefit = benefit * counts.gangs.float
+  #var totalCost = agent.getCost()
+  var totalCost = counts.firms.float * cost
+  result = agent.state.float * (totalBenefit - totalCost)
   agent.benefits = totalBenefit
   agent.costs = totalCost
 
 proc sampleNeighbor*(state: var State, agent: int): int {.inline.} =
   let agent = state.agents[agent]
-  if agent.neighbors.len == 0 or state.rng.rand(1.0) < agent.mutationRate:
+  if (
+    agent.state == false or
+    (agent.neighbors.len == 0 and state.rng.rand(1.0) < agent.mutationRate)
+  ):
     var other = state.rng.sample(state.agents).id
-    while state.agents[other].id == agent.id:
+    while other == agent.id:
       other = state.rng.sample(state.agents).id
     return other
 
   # sample a random neighbor of neighbors
   if agent.neighbors.len > 0:
     var options = agent.neighbors.keys().toseq()
-    result = state.rng.sample(agent.neighbors.keys().toseq())
-    if state.agents[result].neighbors.len > 0:
-      for other in state.agents[result].neighbors.keys():
-        if other notin options:
-          options.add other
-      return state.rng.sample(options)
+    let m = options.len
+    for idx in (0 ..< m):
+      let neighbor = options[idx]
+      if state.agents[neighbor].neighbors.len > 0:
+        for other in state.agents[result].neighbors.keys():
+          if other notin options:
+            options.add other
+    return state.rng.sample(options)
   # default option:
   return agent.id
 
@@ -419,13 +428,12 @@ proc step*(state: var State, agent: int, mutations: var seq[Mutation]) {.inline.
   buffer[0] = state.getPayoff(agent)
   if state.rng.rand(1.0) < state.agents[agent].edgeRate:
     let other = state.sampleNeighbor(agent)
+    var factor = 1.0
     currents.add(state.agents[other].makeMutation())
     # add or remove an agent
     performEdgeAction(state, agent, other)
     buffer[1] = state.getPayoff(agent)
   else:
-    let prior = state.agents[agent].state
-    let s = state.agents[agent].state
     changeStrategy(state.agents[agent])
     buffer[1] = state.getPayoff(agent)
 

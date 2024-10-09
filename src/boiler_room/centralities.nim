@@ -1,6 +1,34 @@
 import sequtils, sets, tables, math
 from boiler_room.agent import State, Agent
 
+proc averageClusteringCoefficient*(state: State): float =
+  var totalCoefficient = 0.0
+  var nonZeroDegreeNodes = 0
+
+  for agent in state.agents:
+    let k = agent.neighbors.len
+    if k < 2:
+      continue # Skip nodes with degree less than 2
+
+    var triangles = 0
+    for neighbor1 in agent.neighbors.keys():
+      for neighbor2 in agent.neighbors.keys():
+        if neighbor1 != neighbor2 and neighbor2 in state.agents[neighbor1].neighbors:
+          triangles += 1
+
+    let localClusteringCoefficient =
+      if k > 1:
+        triangles.float / (k * (k - 1)).float
+      else:
+        0.0
+    totalCoefficient += localClusteringCoefficient
+    nonZeroDegreeNodes += 1
+
+  if nonZeroDegreeNodes > 0:
+    result = totalCoefficient / nonZeroDegreeNodes.float
+  else:
+    result = 0.0
+
 proc degreeCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
   let n = state.agents.len.float
