@@ -379,8 +379,8 @@ proc getPayoff*(state: State, agentId: int): float {.inline.} =
   let cost = state.config.cost
 
   var totalBenefit = benefit * counts.gangs.float
-  #var totalCost = agent.getCost()
-  var totalCost = counts.firms.float * cost
+  var totalCost = agent.getCost()
+  #var totalCost = counts.firms.float * cost
   result = agent.state.float * (totalBenefit - totalCost)
   agent.benefits = totalBenefit
   agent.costs = totalCost
