@@ -4,7 +4,9 @@ import
     sequtils, terminal, options, sets, hashes, deques, algorithm,
   ]
 import os
-import nimpy
+import nimpy, nimpy/py_lib
+
+#pyInitLibPath("/home/casper/micromamba/envs/boiler/lib/libpython3.12.so.1.0")
 let np = pyImport "numpy"
 let nx = pyImport "networkx"
 let pd = pyImport "pandas"
