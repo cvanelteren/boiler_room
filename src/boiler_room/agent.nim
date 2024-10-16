@@ -6,7 +6,7 @@ import
 import os
 import nimpy, nimpy/py_lib
 
-#pyInitLibPath("/home/casper/micromamba/envs/boiler/lib/libpython3.12.so.1.0")
+pyInitLibPath("/home/casper/micromamba/envs/boiler/lib/libpython3.12.so.1.0")
 let np = pyImport "numpy"
 let nx = pyImport "networkx"
 let pd = pyImport "pandas"
@@ -246,14 +246,25 @@ proc makeMutation(agent: Agent): Mutation {.inline.} =
     costs: agent.costs,
   )
 
+proc denseStartLinspace*(start, stop: int, num: int): seq[int] =
+  result = newSeq[int](num)
+  let
+    start_f = start.float
+    stop_f = stop.float
+
+  result[0] = start
+  for i in 1 ..< num:
+    let t = i.float / (num - 1).float
+    var value = (start_f + (stop_f - start_f) * pow(t, 2)).round().int
+    while value in result and value < stop:
+      value.inc
+    result[i] = value
+
+  # Ensure the last element is exactly the stop value
+  result[^1] = stop
+
 proc generateSnapshots*(t, n: int): seq[int] =
-  return (0 ..< t).toseq()
-  if n <= 0:
-    return (0 ..< t).toseq()
-  let first = (0.5 * n.float).int
-  let second = (0.50 * n.float).int
-  let m = (t - first).div(second)
-  result = (1 ..< first).toseq().concat(countUp(first, t, m).toseq())
+  return denseStartLinspace(0, t, n)
 
 proc calculateCost*(state: State, agent: int, prior_cost: float): float {.inline.} =
   # compute the criminal cost proportional to its degree
