@@ -102,6 +102,10 @@ proc readParams*(fp: string, target: string = "general"): Config =
   if "mutationRate" in tmp[target]:
     result.mutationRate = tmp[target]["mutationRate"].getFloat()
 
+  result.edgeRate = 0.5
+  if "edgeRate" in tmp[target]:
+    result.edgeRate = tmp[target]["edgeRate"].getFloat()
+
   result.step = 1
   if "N" in tmp[target]:
     result.step = tmp[target]["N"].getInt()

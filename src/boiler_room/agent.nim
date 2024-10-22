@@ -69,6 +69,7 @@ type
       start_criminality, start_density: float,
       kind_intervention, which_intervention: string,
       n_intervention: int,
+      distance: float,
     ]
 
   SimInfo {.sendable.} = ref object
@@ -353,7 +354,7 @@ proc countOrganizations(
 
   for option in options:
     crawler.seen = crawler.seen + seen
-    crawler.roles.excl agent.parent.agents[option].role
+    #crawler.roles.excl agent.parent.agents[option].role
     if crawler.roles.len > 0:
       let subcount = countOrganizations(agent.parent.agents[option], crawler, depth - 1)
       result.firms += subcount.firms
@@ -370,7 +371,6 @@ proc getCountOrganizations*(
   let toFind = agent.parent.valueNetwork[agent.role].keys().toseq().toHashSet()
 
   var crawler = Crawler(roles: toFind, seen: seen)
-  crawler.roles.excl agent.role
   result = countOrganizations(agent, crawler, depth = maxDepth)
 
 proc getCost(a: Agent, alpha = 2.0): float =
@@ -392,8 +392,7 @@ proc getPayoff*(state: State, agentId: int): float {.inline.} =
   let cost = state.config.cost
 
   var totalBenefit = benefit * counts.gangs.float
-  var totalCost = agent.getCost()
-  #var totalCost = counts.firms.float * cost
+  var totalCost = counts.firms.float * cost
   result = agent.state.float * (totalBenefit - totalCost)
   agent.benefits = totalBenefit
   agent.costs = totalCost

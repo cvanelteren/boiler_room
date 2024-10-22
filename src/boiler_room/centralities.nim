@@ -29,6 +29,12 @@ proc averageClusteringCoefficient*(state: State): float =
   else:
     result = 0.0
 
+proc getDensity*(self: State): float =
+  let z = self.agents.len.float
+  for agent in self.agents:
+    result += agent.neighbors.len.float
+  result /= (z * (z - 1))
+
 proc degreeCentrality*(state: State): Table[int, float] {.inline.} =
   result = initTable[int, float]()
   let n = state.agents.len.float
@@ -253,10 +259,9 @@ proc roleAssortativityCentrality*(state: State): Table[int, float] {.inline.} =
     let egoGraph = createEgoGraph(state, agent.id)
     result[agent.id] = roleAssortativity(egoGraph, agent.id)
 
-
 proc normalizeBetweenness*(betweenness: Table[int, float], n: int): Table[int, float] =
   result = initTable[int, float]()
-  let normalizer = ((n-1) * (n-2) / 2).float
+  let normalizer = ((n - 1) * (n - 2) / 2).float
   for id, value in betweenness:
     result[id] = value / normalizer
 
@@ -275,38 +280,46 @@ proc normalizeDegree*(degree: Table[int, float], n: int): Table[int, float] =
     result[id] = value / maxPossibleDegree
 
 proc normalizeRoleAssortativity*(assortativity: Table[int, float]): Table[int, float] =
-      result = initTable[int, float]()
-      let minValue = min(toSeq(assortativity.values))
-      let maxValue = max(toSeq(assortativity.values))
-      let range = maxValue - minValue
-      for id, value in assortativity:
-        if range != 0:
-          result[id] = (value - minValue) / range
-        else:
-          result[id] = 0
+  result = initTable[int, float]()
+  let minValue = min(toSeq(assortativity.values))
+  let maxValue = max(toSeq(assortativity.values))
+  let range = maxValue - minValue
+  for id, value in assortativity:
+    if range != 0:
+      result[id] = (value - minValue) / range
+    else:
+      result[id] = 0
 
-proc calculateBetweennessCentrality*(state: State,normalize:bool = false): Table[int, float] =
+proc calculateBetweennessCentrality*(
+    state: State, normalize: bool = false
+): Table[int, float] =
   let rawBetweenness = betweennessCentrality(state)
   if normalize:
-    result = normalizeBetweenness(rawBetweenness,state.agents.len)
+    result = normalizeBetweenness(rawBetweenness, state.agents.len)
   else:
     result = rawBetweenness
 
-proc calculateClosenessCentrality*(state: State,normalize:bool = false): Table[int, float] =
+proc calculateClosenessCentrality*(
+    state: State, normalize: bool = false
+): Table[int, float] =
   let rawCloseness = closenessCentrality(state)
   if normalize:
-    result = normalizeCloseness(rawCloseness,state.agents.len)
+    result = normalizeCloseness(rawCloseness, state.agents.len)
   else:
     result = rawCloseness
 
-proc calculateDegreeCentrality*(state: State, normalize:bool =false): Table[int, float] =
+proc calculateDegreeCentrality*(
+    state: State, normalize: bool = false
+): Table[int, float] =
   let rawDegree = degreeCentrality(state)
   if normalize:
     result = normalizeDegree(rawDegree, state.agents.len)
   else:
     result = rawDegree
 
-proc calculateRoleAssortativityCentrality*(state:State,normalize: bool = false): Table[int, float] =
+proc calculateRoleAssortativityCentrality*(
+    state: State, normalize: bool = false
+): Table[int, float] =
   let rawAssortativity = roleAssortativityCentrality(state)
   if normalize:
     result = normalizeRoleAssortativity(rawAssortativity)
