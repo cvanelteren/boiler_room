@@ -1,7 +1,7 @@
 import
   std/[
     sequtils, random, math, strutils, tables, sets, strformat, strutils, tables,
-    sequtils, terminal, options, sets, hashes, deques, algorithm,
+    sequtils, terminal, options, sets, hashes, deques, algorithm, sugar,
   ]
 import os
 import nimpy, nimpy/py_lib
@@ -228,6 +228,7 @@ proc setup*(base: Config, g, valueNetwork: PyObject): State =
   result.rng = initRand(result.config.seed)
 
 proc fermiUpdate*(delta, beta: float): float =
+  let beta = if beta > 0.0: beta else: Inf
   result = 1.0 / (1.0 + exp(-(1 / beta) * delta))
 
 proc getAvailableRoles*(agent: Agent): Table[string, seq[int]] =
@@ -392,6 +393,7 @@ proc getPayoff*(state: State, agentId: int): float {.inline.} =
   let cost = state.config.cost
 
   var totalBenefit = benefit * counts.gangs.float
+  #var totalCost = agent.getCost()
   var totalCost = counts.firms.float * cost
   result = agent.state.float * (totalBenefit - totalCost)
   agent.benefits = totalBenefit
@@ -490,7 +492,8 @@ proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
 proc makeBuffer(
     n: int, state: var State, agents: var seq[int], mutations: var seq[Mutation]
 ): seq[float] =
-  result = newSeqWith[float](n, 1.0)
+  result = newSeq[float](n)
+  result.fill(1.0)
   let z = 1 / n.float
   # fill the buffer
   for idx in 0 ..< result.len:
