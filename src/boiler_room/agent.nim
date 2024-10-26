@@ -106,6 +106,12 @@ proc drawState(s: var State): bool =
 proc hasNeighbor*(this: Agent, other: int): bool =
   result = other in this.neighbors
 
+proc toDense*(state: State): seq[seq[bool]] =
+  result = newSeqWith(state.agents.len, newSeq[bool](state.agents.len))
+  for agent in state.agents:
+    for neighbor in agent.neighbors.keys():
+      result[agent.id][neighbor] = true
+
 proc toAdj*(state: State): seq[(int, int)] =
   var unique = initHashSet[(int, int)]()
   for agent in state.agents:
