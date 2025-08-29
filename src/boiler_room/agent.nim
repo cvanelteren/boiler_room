@@ -490,7 +490,6 @@ proc simulate*(state: var State, t: int, n: int = 0): seq[seq[Mutation]] =
     mutations = @[]
     #let agent = state.rng.sample(agents)
     #state.step(agent, mutations)
-
     state.rng.shuffle(agents)
     for agent in agents: #NOTE: will add to mutations if new state is accepted
       state.step(agent, mutations)
