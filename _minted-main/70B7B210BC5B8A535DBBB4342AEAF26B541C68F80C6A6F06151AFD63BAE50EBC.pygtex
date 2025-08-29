@@ -1,0 +1,28 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{k+kn}{import} \PYG{n+nn}{proplot} \PYG{k}{as} \PYG{n+nn}{plt}\PYG{o}{,} \PYG{n+nn}{cmasher} \PYG{k}{as} \PYG{n+nn}{cmr}\PYG{o}{,} \PYG{n+nn}{pandas} \PYG{k}{as} \PYG{n+nn}{pd}\PYG{o}{,}\PYGZbs{}
+    \PYG{n}{numpy} \PYG{k}{as} \PYG{n}{np}\PYG{p}{,} \PYG{n}{os}\PYG{p}{,} \PYG{n}{sys}\PYG{p}{,} \PYG{n}{networkx} \PYG{k}{as} \PYG{n}{nx}\PYG{p}{,} \PYG{n}{warnings}
+\PYG{k+kn}{from} \PYG{n+nn}{scipy.special} \PYG{k+kn}{import} \PYG{n}{factorial}
+\PYG{n}{warnings}\PYG{o}{.}\PYG{n}{simplefilter}\PYG{p}{(}\PYG{l+s+s2}{\PYGZdq{}ignore\PYGZdq{}}\PYG{p}{)}
+\PYG{n}{ks} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mi}{0}\PYG{p}{,} \PYG{l+m+mi}{5}\PYG{p}{)}
+
+\PYG{n}{bs} \PYG{o}{=} \PYG{p}{[}\PYG{l+m+mf}{0.1}\PYG{p}{,} \PYG{l+m+mi}{10}\PYG{p}{]}
+\PYG{n}{c} \PYG{o}{=} \PYG{l+m+mi}{1}
+\PYG{n}{beta} \PYG{o}{=} \PYG{l+m+mi}{1}
+
+
+\PYG{n}{fig}\PYG{p}{,} \PYG{n}{ax} \PYG{o}{=} \PYG{n}{plt}\PYG{o}{.}\PYG{n}{subplots}\PYG{p}{(}\PYG{n}{ncols} \PYG{o}{=} \PYG{l+m+mi}{2}\PYG{p}{)}
+\PYG{k}{for} \PYG{n}{axi}\PYG{p}{,} \PYG{n}{b} \PYG{o+ow}{in} \PYG{n+nb}{zip}\PYG{p}{(}\PYG{n}{ax}\PYG{p}{,} \PYG{n}{bs}\PYG{p}{):}
+    \PYG{c+c1}{\PYGZsh{} b, c = c, b}
+    \PYG{n}{rates} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{linspace}\PYG{p}{(}\PYG{l+m+mi}{0}\PYG{p}{,} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{l+m+mi}{11}\PYG{p}{)}
+    \PYG{n}{labels} \PYG{o}{=} \PYG{p}{[}\PYG{l+s+sa}{f}\PYG{l+s+s2}{\PYGZdq{}}\PYG{l+s+si}{\PYGZob{}}\PYG{n}{i}\PYG{l+s+si}{:}\PYG{l+s+s2}{0.2f}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}} \PYG{k}{for} \PYG{n}{i} \PYG{o+ow}{in} \PYG{n}{rates}\PYG{p}{]}
+    \PYG{n}{rs} \PYG{o}{=} \PYG{n}{rates} \PYG{o}{*} \PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{\PYGZhy{}} \PYG{n}{rates}\PYG{p}{)} \PYG{o}{*} \PYG{p}{(}\PYG{l+m+mi}{2} \PYG{o}{\PYGZhy{}} \PYG{n}{rates}\PYG{p}{)} \PYG{o}{*} \PYG{l+m+mi}{1}\PYG{o}{/}\PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{+} \PYG{n}{np}\PYG{o}{.}\PYG{n}{exp}\PYG{p}{(}\PYG{o}{\PYGZhy{}}\PYG{n}{beta} \PYG{o}{*} \PYG{n}{c}\PYG{p}{))} \PYG{o}{+} \PYGZbs{}
+        \PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{\PYGZhy{}} \PYG{n}{rates}\PYG{p}{)}\PYG{o}{**}\PYG{l+m+mi}{3} \PYG{o}{*} \PYG{l+m+mi}{1}\PYG{o}{/}\PYG{p}{(}\PYG{l+m+mi}{1} \PYG{o}{+} \PYG{n}{np}\PYG{o}{.}\PYG{n}{exp}\PYG{p}{(}\PYG{o}{\PYGZhy{}}\PYG{n}{beta} \PYG{o}{*} \PYG{p}{(}\PYG{n}{b} \PYG{o}{\PYGZhy{}} \PYG{n}{c}\PYG{p}{)))}
+    \PYG{n}{k}\PYG{p}{,} \PYG{n}{r} \PYG{o}{=} \PYG{n}{np}\PYG{o}{.}\PYG{n}{meshgrid}\PYG{p}{(}\PYG{n}{ks}\PYG{p}{,} \PYG{n}{rs}\PYG{p}{)}
+    \PYG{n}{y} \PYG{o}{=} \PYG{n}{r} \PYG{o}{**} \PYG{n}{k} \PYG{o}{*} \PYG{n}{np}\PYG{o}{.}\PYG{n}{exp}\PYG{p}{(}\PYG{o}{\PYGZhy{}}\PYG{n}{r}\PYG{p}{)} \PYG{o}{/} \PYG{n}{factorial}\PYG{p}{(}\PYG{n}{k}\PYG{p}{)}
+    \PYG{n}{axi}\PYG{o}{.}\PYG{n}{plot}\PYG{p}{(}\PYG{n}{y}\PYG{o}{.}\PYG{n}{T}\PYG{p}{,} \PYG{n}{cycle} \PYG{o}{=} \PYG{n}{cmr}\PYG{o}{.}\PYG{n}{bubblegum}\PYG{p}{,} \PYG{n}{labels} \PYG{o}{=} \PYG{n}{labels}\PYG{p}{)}
+    \PYG{n}{axi}\PYG{o}{.}\PYG{n}{set\PYGZus{}title}\PYG{p}{(}\PYG{l+s+sa}{f}\PYG{l+s+s2}{\PYGZdq{}b = }\PYG{l+s+si}{\PYGZob{}}\PYG{n}{b}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{ c = }\PYG{l+s+si}{\PYGZob{}}\PYG{n}{c}\PYG{l+s+si}{\PYGZcb{}}\PYG{l+s+s2}{\PYGZdq{}}\PYG{p}{)}
+
+\PYG{n}{ax}\PYG{p}{[}\PYG{o}{\PYGZhy{}}\PYG{l+m+mi}{1}\PYG{p}{]}\PYG{o}{.}\PYG{n}{legend}\PYG{p}{(}\PYG{n}{title} \PYG{o}{=} \PYG{l+s+sa}{r}\PYG{l+s+s2}{\PYGZdq{}\PYGZdl{}\PYGZbs{}frac}\PYG{l+s+si}{\PYGZob{}C\PYGZcb{}\PYGZob{}N\PYGZcb{}}\PYG{l+s+s2}{\PYGZdl{}\PYGZdq{}}\PYG{p}{,} \PYG{n}{ncols} \PYG{o}{=} \PYG{l+m+mi}{1}\PYG{p}{,} \PYG{n}{loc} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}r\PYGZdq{}}\PYG{p}{)}
+\PYG{n}{ax}\PYG{o}{.}\PYG{n}{format}\PYG{p}{(}\PYG{n}{abc} \PYG{o}{=} \PYG{k+kc}{True}\PYG{p}{,} \PYG{n}{xlabel} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}Success(k)\PYGZdq{}}\PYG{p}{,} \PYG{n}{ylabel} \PYG{o}{=} \PYG{l+s+s2}{\PYGZdq{}P(X = k)\PYGZdq{}}\PYG{p}{)}
+\PYG{n}{fig}\PYG{o}{.}\PYG{n}{show}\PYG{p}{()}
+\end{Verbatim}

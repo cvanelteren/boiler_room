@@ -1,51 +1,61 @@
-import sequtils, parsetoml
-import nimpy
+import sequtils, parsetoml, strutils, strformat
+from agent import Config, Mutation, DataPoint, State
 
-type Config* = object of RootObj
-  states*: seq[float]
-  roles*: seq[string]
+proc to*(mutations: seq[seq[Mutation]], T: typedesc): DataPoint =
+  result.states = newSeqWith(mutations.len, newSeq[bool]())
+  result.adj = newSeqWith(mutations.len, initTable[int, seq[int]]())
+  result.benefits = @[] #newSeqWith(mutations.len, newSeq[float]())
+  result.costs = @[] #newSeqWith(mutations.len, newSeq[float]())
+  for agent in mutations[0]:
+    result.states[0].add agent.state
+    result.adj[0][agent.id] = agent.neighbors.keys().toseq()
+    #result.benefits[0].add agent.benefits
+    #result.costs[0].add agent.costs
 
-  alpha*, beta*, benefit*, cost*: float
-  mu*: float # deprecated
+  # start from 1 but the index here starts at 0
+  for kdx, mutation in mutations[1 ..^ 1]:
+    result.states[kdx + 1] = result.states[kdx]
+    result.adj[kdx + 1] = result.adj[kdx]
+    #result.benefits[kdx + 1] = result.benefits[kdx]
+    #result.costs[kdx + 1] = result.costs[kdx]
 
-  rewire*: float
-  assortativity*: float
-  depth*:int
-  g*: PyObject
+    for agent in mutation:
+      result.states[kdx + 1][agent.id] = agent.state
+      result.adj[kdx + 1][agent.id] = agent.neighbors.keys().toseq()
+      #result.benefits[kdx + 1][agent.id] = agent.benefits
+      #result.costs[kdx + 1][agent.id] = agent.costs
 
-  n_samples*, t*, seed*, z*: int
-  trial*, n_trials*: int
+proc create_data_name(
+    base: string, config: Config, ext = ".json", additional = ""
+): string =
+  result = [
+    &"{config.p_states=}",
+    &"{config.trial=}",
+    &"{config.beta=}",
+    &"{config.cost=}",
+    &"{config.z=}",
+  ].join("_")
+  result.add additional
+  result = result.replace("config.", "")
+  result = [base, "/", result, ext].join()
 
-  p_states*: seq[seq[float]]
-  p_roles* : seq[float]
+proc create_graph_filename(
+    base: string, config: Config, ext = ".graph", additional = ""
+): string =
+  result = create_data_name(base, config, ext = ".graph", additional = additional)
 
-proc read*(fp: string, target: string = "general"): Config =
+proc readParams*(fp: string, target: string = "general"): Config =
   # TODO: very uggly replace this with more readable code
   let tmp = parsetoml.parseFile(fp).getTable
   result = Config()
 
-  # read states
-  result.states = tmp["general"]["states"].getElems.mapIt(it.getFloat)
-  if "states" in tmp[target]:
-    result.states = tmp[target]["states"].getElems.mapIt(it.getFloat)
-
-  # read roles
-  result.roles = tmp["general"]["roles"].getElems.mapIt(it.getStr)
-  if "roles" in tmp[target]:
-    result.roles = tmp[target]["roles"].getElems.mapIt(it.getStr)
-
   # read p_state
-  result.p_states = tmp["general"]["p_states"].getElems.mapIt(it.getElems.mapIt(it.getFloat))
+  var s = tmp["general"]["p_states"].getElems.mapIt(it.getFloat)
   if "p_states" in tmp[target]:
-    result.p_states = tmp[target]["p_states"].getElems.mapIt(it.getElems.mapIt(it.getFloat))
-
-  assert result.p_states.len == result.roles.len
-
-  # read p_roles
-  result.p_roles = tmp["general"]["p_roles"].getElems.mapIt(it.getFloat)
-  if "p_roles" in tmp[target]:
-    result.p_roles = tmp[target]["p_roles"].getElems.mapIt(it.getFloat)
-
+    s = tmp[target]["p_states"].getElems.mapIt(it.getFloat)
+  result.p_states = initTable[bool, float]()
+  for idx, si in s:
+    result.p_states[idx.bool] = si
 
   # load constants
   result.z = tmp["general"]["z"].getInt
@@ -88,7 +98,14 @@ proc read*(fp: string, target: string = "general"): Config =
   if "n_samples" in tmp[target]:
     result.n_samples = tmp[target]["n_samples"].getInt()
 
+  result.mutationRate = tmp["general"]["mutationRate"].getFloat()
+  if "mutationRate" in tmp[target]:
+    result.mutationRate = tmp[target]["mutationRate"].getFloat()
 
-  result.mu = 0.0
-  if "mu" in tmp[target]:
-    result.mu = tmp[target]["mu"].getFloat()
+  result.edgeRate = 0.5
+  if "edgeRate" in tmp[target]:
+    result.edgeRate = tmp[target]["edgeRate"].getFloat()
+
+  result.step = 1
+  if "N" in tmp[target]:
+    result.step = tmp[target]["N"].getInt()
